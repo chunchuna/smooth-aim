@@ -327,6 +327,8 @@ private:
     alignas(64) std::atomic<int> m_totalCaptureFrames{0};
     alignas(64) std::atomic<int> m_totalDetectionFrames{0};
     int m_noTargetFrames = 0;  // 连续无目标帧数
+    double m_accumX = 0.0;    // 亚像素移动累积器
+    double m_accumY = 0.0;
 
     // PID参数脏标志 (GUI线程设置, 推理线程消费)
     alignas(64) std::atomic<bool> m_pidDirty{false};
@@ -573,6 +575,8 @@ void DetectionSystem::DetectionLoop() {
             if (m_noTargetFrames > 5) {
                 m_pidX.reset();
                 m_pidY.reset();
+                m_accumX = 0.0;
+                m_accumY = 0.0;
             }
         } else {
             m_noTargetFrames = 0;
@@ -612,39 +616,60 @@ void DetectionSystem::DetectionLoop() {
                     double outX = m_pidX.update(dx);
                     double outY = m_pidY.update(dy);
 
-                    float smooth = std::max(m_config.aimSmooth, 1.0f);
-                    int mx = (int)std::round(outX / smooth);
-                    int my = (int)std::round(outY / smooth);
-
-                    if (mx == 0 && my == 0) {
-                        // PID输出太小，跳过
-                    } else if (m_config.moveMode == 0 && (std::abs(outX) > 5.0 || std::abs(outY) > 5.0)) {
-                        // 曲线模式: 仅当移动量足够大时使用曲线
+                    if (m_config.moveMode == 0) {
+                        // 曲线模式: 使用 MMousePredictor 生成人性化轨迹
                         auto path = m_mouseCurve.moveTo(outX, outY);
-                        if (!path.empty()) {
-                            for (const auto& pt : path) {
-                                int px = (int)std::round(pt.first / smooth);
-                                int py = (int)std::round(pt.second / smooth);
-                                if (px != 0 || py != 0) {
-                                    MoveMouse(px, py);
-                                }
+                        // 发送轨迹上的每一个点
+                        float smooth = std::max(m_config.aimSmooth, 1.0f);
+                        for (const auto& pt : path) {
+                            m_accumX += pt.first / smooth;
+                            m_accumY += pt.second / smooth;
+                            int mx = (int)m_accumX;
+                            int my = (int)m_accumY;
+                            if (mx != 0 || my != 0) {
+                                m_accumX -= mx;
+                                m_accumY -= my;
+                                MoveMouse(mx, my);
                             }
-                        } else {
-                            // 曲线返回空, fallback到直接移动
-                            MoveMouse(mx, my);
+                        }
+                        // 曲线路径为空时(小位移), 直接累积PID输出
+                        if (path.empty()) {
+                            float smooth = std::max(m_config.aimSmooth, 1.0f);
+                            m_accumX += outX / smooth;
+                            m_accumY += outY / smooth;
+                            int mx = (int)m_accumX;
+                            int my = (int)m_accumY;
+                            if (mx != 0 || my != 0) {
+                                m_accumX -= mx;
+                                m_accumY -= my;
+                                MoveMouse(mx, my);
+                            }
                         }
                     } else {
-                        // 直接模式 或 小移动量直接发送
-                        MoveMouse(mx, my);
+                        // 直接模式: 累积PID输出
+                        float smooth = std::max(m_config.aimSmooth, 1.0f);
+                        m_accumX += outX / smooth;
+                        m_accumY += outY / smooth;
+                        int mx = (int)m_accumX;
+                        int my = (int)m_accumY;
+                        if (mx != 0 || my != 0) {
+                            m_accumX -= mx;
+                            m_accumY -= my;
+                            MoveMouse(mx, my);
+                        }
                     }
                 } else {
-                    // 未按键时重置PID, 下次按键时从新鲜状态开始
+                    // 未按键时重置PID和累积器
                     m_pidX.reset();
                     m_pidY.reset();
+                    m_accumX = 0.0;
+                    m_accumY = 0.0;
                 }
             } else {
                 m_pidX.reset();
                 m_pidY.reset();
+                m_accumX = 0.0;
+                m_accumY = 0.0;
             }
         }
 
