@@ -1,0 +1,38 @@
+# Build output
+x64/
+Debug/
+Release/
+*.exe
+*.dll
+*.pdb
+*.obj
+*.lib
+*.exp
+*.ilk
+*.log
+*.tlog
+*.idb
+*.ipdb
+*.iobj
+*.recipe
+*.lastbuildstate
+
+# VS files
+.vs/
+*.suo
+*.user
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+ipch/
+
+# Models (too large for git)
+AiMod/x64/
+*.onnx
+
+# Launcher
+launcher_config.json
+
+# Tools
+曲线训练工具.exe

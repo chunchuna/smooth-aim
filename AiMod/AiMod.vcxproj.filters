@@ -1,0 +1,135 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Yolo">
+      <UniqueIdentifier>{84e51dc7-04cf-4f22-82b6-2cade212d5d0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Cap">
+      <UniqueIdentifier>{3daa793d-822b-4d46-8138-dfe782c8feea}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Curve">
+      <UniqueIdentifier>{00be2c5d-13a2-4ebc-b37f-3527bbdda6fc}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="AiMod.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="cap\DXScreenCapture.cpp">
+      <Filter>Cap</Filter>
+    </ClCompile>
+    <ClCompile Include="cap\GDIScreenCapture.cpp">
+      <Filter>Cap</Filter>
+    </ClCompile>
+    <ClCompile Include="cap\obs.cpp">
+      <Filter>Cap</Filter>
+    </ClCompile>
+    <ClCompile Include="cap\ScreenCapture.cpp">
+      <Filter>Cap</Filter>
+    </ClCompile>
+    <ClCompile Include="cap\WGCScreenCapture.cpp">
+      <Filter>Cap</Filter>
+    </ClCompile>
+    <ClCompile Include="curve.cpp">
+      <Filter>Curve</Filter>
+    </ClCompile>
+    <ClCompile Include="yolodml\Yolo.cpp">
+      <Filter>Yolo</Filter>
+    </ClCompile>
+    <ClCompile Include="yolodml\YoloDetect.cpp">
+      <Filter>Yolo</Filter>
+    </ClCompile>
+    <ClCompile Include="yolodml\YoloV5.cpp">
+      <Filter>Yolo</Filter>
+    </ClCompile>
+    <ClCompile Include="yolodml\YoloV7.cpp">
+      <Filter>Yolo</Filter>
+    </ClCompile>
+    <ClCompile Include="yolodml\YoloV8.cpp">
+      <Filter>Yolo</Filter>
+    </ClCompile>
+    <ClCompile Include="yolodml\YoloV10.cpp">
+      <Filter>Yolo</Filter>
+    </ClCompile>
+    <ClCompile Include="yolodml\YoloV11.cpp">
+      <Filter>Yolo</Filter>
+    </ClCompile>
+    <ClCompile Include="yolodml\YoloV12.cpp">
+      <Filter>Yolo</Filter>
+    </ClCompile>
+    <ClCompile Include="yolodml\YoloV26.cpp">
+      <Filter>Yolo</Filter>
+    </ClCompile>
+    <ClCompile Include="yolodml\YoloX.cpp">
+      <Filter>Yolo</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="cap\DXScreenCapture.h">
+      <Filter>Cap</Filter>
+    </ClInclude>
+    <ClInclude Include="cap\GDIScreenCapture.h">
+      <Filter>Cap</Filter>
+    </ClInclude>
+    <ClInclude Include="cap\IScreenCapture.h">
+      <Filter>Cap</Filter>
+    </ClInclude>
+    <ClInclude Include="cap\obs.h">
+      <Filter>Cap</Filter>
+    </ClInclude>
+    <ClInclude Include="cap\ScreenCapture.h">
+      <Filter>Cap</Filter>
+    </ClInclude>
+    <ClInclude Include="cap\WGCScreenCapture.h">
+      <Filter>Cap</Filter>
+    </ClInclude>
+    <ClInclude Include="curve.h">
+      <Filter>Curve</Filter>
+    </ClInclude>
+    <ClInclude Include="KalmanFilter.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="yolodml\Yolo.h">
+      <Filter>Yolo</Filter>
+    </ClInclude>
+    <ClInclude Include="yolodml\YoloDetect.h">
+      <Filter>Yolo</Filter>
+    </ClInclude>
+    <ClInclude Include="yolodml\YoloV5.h">
+      <Filter>Yolo</Filter>
+    </ClInclude>
+    <ClInclude Include="yolodml\YoloV7.h">
+      <Filter>Yolo</Filter>
+    </ClInclude>
+    <ClInclude Include="yolodml\YoloV8.h">
+      <Filter>Yolo</Filter>
+    </ClInclude>
+    <ClInclude Include="yolodml\YoloV10.h">
+      <Filter>Yolo</Filter>
+    </ClInclude>
+    <ClInclude Include="yolodml\YoloV11.h">
+      <Filter>Yolo</Filter>
+    </ClInclude>
+    <ClInclude Include="yolodml\YoloV12.h">
+      <Filter>Yolo</Filter>
+    </ClInclude>
+    <ClInclude Include="yolodml\YoloV26.h">
+      <Filter>Yolo</Filter>
+    </ClInclude>
+    <ClInclude Include="yolodml\YoloX.h">
+      <Filter>Yolo</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
