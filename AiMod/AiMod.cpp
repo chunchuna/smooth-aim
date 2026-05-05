@@ -22,6 +22,7 @@
 #include "KalmanFilter.h"
 #include "curve.h"
 #include "pid.h"
+#include "Win32Gui.h"
 
 // ============================================================
 // 模型文件扫描
@@ -327,8 +328,6 @@ private:
     alignas(64) std::atomic<int> m_totalCaptureFrames{0};
     alignas(64) std::atomic<int> m_totalDetectionFrames{0};
     int m_noTargetFrames = 0;  // 连续无目标帧数
-    double m_accumX = 0.0;    // 亚像素移动累积器
-    double m_accumY = 0.0;
 
     // PID参数脏标志 (GUI线程设置, 推理线程消费)
     alignas(64) std::atomic<bool> m_pidDirty{false};
@@ -336,6 +335,9 @@ private:
     alignas(64) std::atomic<bool> m_modelDirty{false};
     // 模型是否已加载
     alignas(64) std::atomic<bool> m_modelLoaded{false};
+
+    // Win32 原生GUI面板
+    Win32GuiPanel m_guiPanel;
 };
 
 DetectionSystem::~DetectionSystem() {
@@ -575,8 +577,6 @@ void DetectionSystem::DetectionLoop() {
             if (m_noTargetFrames > 5) {
                 m_pidX.reset();
                 m_pidY.reset();
-                m_accumX = 0.0;
-                m_accumY = 0.0;
             }
         } else {
             m_noTargetFrames = 0;
@@ -622,54 +622,29 @@ void DetectionSystem::DetectionLoop() {
                         // 发送轨迹上的每一个点
                         float smooth = std::max(m_config.aimSmooth, 1.0f);
                         for (const auto& pt : path) {
-                            m_accumX += pt.first / smooth;
-                            m_accumY += pt.second / smooth;
-                            int mx = (int)m_accumX;
-                            int my = (int)m_accumY;
+                            int mx = (int)std::round(pt.first / smooth);
+                            int my = (int)std::round(pt.second / smooth);
                             if (mx != 0 || my != 0) {
-                                m_accumX -= mx;
-                                m_accumY -= my;
-                                MoveMouse(mx, my);
-                            }
-                        }
-                        // 曲线路径为空时(小位移), 直接累积PID输出
-                        if (path.empty()) {
-                            float smooth = std::max(m_config.aimSmooth, 1.0f);
-                            m_accumX += outX / smooth;
-                            m_accumY += outY / smooth;
-                            int mx = (int)m_accumX;
-                            int my = (int)m_accumY;
-                            if (mx != 0 || my != 0) {
-                                m_accumX -= mx;
-                                m_accumY -= my;
                                 MoveMouse(mx, my);
                             }
                         }
                     } else {
-                        // 直接模式: 累积PID输出
+                        // 直接模式: 一次SendInput移动
                         float smooth = std::max(m_config.aimSmooth, 1.0f);
-                        m_accumX += outX / smooth;
-                        m_accumY += outY / smooth;
-                        int mx = (int)m_accumX;
-                        int my = (int)m_accumY;
+                        int mx = (int)std::round(outX / smooth);
+                        int my = (int)std::round(outY / smooth);
                         if (mx != 0 || my != 0) {
-                            m_accumX -= mx;
-                            m_accumY -= my;
                             MoveMouse(mx, my);
                         }
                     }
                 } else {
-                    // 未按键时重置PID和累积器
+                    // 未按键时重置PID, 下次按键时从新鲜状态开始
                     m_pidX.reset();
                     m_pidY.reset();
-                    m_accumX = 0.0;
-                    m_accumY = 0.0;
                 }
             } else {
                 m_pidX.reset();
                 m_pidY.reset();
-                m_accumX = 0.0;
-                m_accumY = 0.0;
             }
         }
 
@@ -957,22 +932,32 @@ void DetectionSystem::GuiLoop() {
         putLine("Detection FPS: " + std::to_string(m_detectionFPS.load()).substr(0, 5));
         putLine("Det Time: " + std::to_string(m_avgDetectionTime.load()).substr(0, 5) + " ms");
         putLine("");
-        putLine("[R] Load Model  [S] Save  [L] Load Config  [ESC] Quit", cv::Scalar(0, 200, 255));
+        putLine("[Ctrl+R] Load Model  [Ctrl+S] Save  [Ctrl+L] Load  [ESC] Quit", cv::Scalar(0, 200, 255));
 
         cv::imshow(winName, panel);
 
         int key = cv::waitKey(50);
-        if (key == 27) { // ESC
+        // ESC 只在OpenCV窗口有焦点时生效，防止游戏内按ESC误退出
+        if (key == 27) {
             m_running = false;
             break;
-        } else if (key == 's' || key == 'S') {
+        }
+
+        // Ctrl+R/S/L 全局热键，不需要窗口焦点，不会跟游戏按键冲突
+        static bool prevR = false, prevS = false, prevL = false;
+        bool ctrlDown = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+        bool curR = ctrlDown && (GetAsyncKeyState('R') & 0x8000) != 0;
+        bool curS = ctrlDown && (GetAsyncKeyState('S') & 0x8000) != 0;
+        bool curL = ctrlDown && (GetAsyncKeyState('L') & 0x8000) != 0;
+
+        if (curS && !prevS) {
             SaveConfig(m_config);
             std::cout << "[AiMod] Config saved to aimod_config.json" << std::endl;
-        } else if (key == 'r' || key == 'R') {
+        } else if (curR && !prevR) {
             // 请求推理线程重载模型
             m_modelDirty.store(true, std::memory_order_release);
             std::cout << "[AiMod] Model load requested: " << m_config.modelPath << std::endl;
-        } else if (key == 'l' || key == 'L') {
+        } else if (curL && !prevL) {
             m_config = LoadConfig();
             // 同步trackbar
             tb_KpX = (int)(m_config.KpX * 10);
@@ -1021,6 +1006,8 @@ void DetectionSystem::GuiLoop() {
             m_pidDirty.store(true, std::memory_order_release);
             std::cout << "[AiMod] Config loaded from aimod_config.json" << std::endl;
         }
+
+        prevR = curR; prevS = curS; prevL = curL;
     }
 
     cv::destroyWindow(winName);

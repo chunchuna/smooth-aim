@@ -156,6 +156,7 @@
       <AdditionalDependencies>opencv_world.lib;HPSocket.lib;onnxruntime.lib;dxcore.lib;AiModPID.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreSpecificDefaultLibraries>LIBCMT;libcpmt</IgnoreSpecificDefaultLibraries>
       <AdditionalOptions> /IGNORE:4099 /IGNORE:4006 /IGNORE:4078 /IGNORE:4217 %(AdditionalOptions)</AdditionalOptions>
+      <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
