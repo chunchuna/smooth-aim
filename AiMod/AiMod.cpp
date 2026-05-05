@@ -774,243 +774,155 @@ bool DetectionSystem::UpdateCaptureRegion(int x, int y, int width, int height) {
 }
 
 // ============================================================
-// GUI 控制面板 (OpenCV trackbar)
+// GUI 控制面板 (Win32 原生)
 // ============================================================
 void DetectionSystem::GuiLoop() {
-    const std::string winName = "AiMod Control Panel";
-    cv::namedWindow(winName, cv::WINDOW_AUTOSIZE);
-
-    // --- Trackbar 整数代理变量 (trackbar只支持int) ---
-    // PID X
-    int tb_KpX = (int)(m_config.KpX * 10);       // 0.1精度, 范围0-1000 => 0.0-100.0
-    int tb_KdX = (int)(m_config.KdX * 10);
-    int tb_PredictX = (int)(m_config.PredictX * 100); // 0.01精度
-    int tb_RateX = (int)(m_config.RateX * 100);
-    // PID Y
-    int tb_KpY = (int)(m_config.KpY * 10);
-    int tb_KdY = (int)(m_config.KdY * 10);
-    int tb_PredictY = (int)(m_config.PredictY * 100);
-    int tb_RateY = (int)(m_config.RateY * 100);
-    // 检测
-    int tb_conf = (int)(m_config.confThreshold * 100);  // 0-100
-    int tb_nms = (int)(m_config.nmsThreshold * 100);
-    // 模型文件选择 (从g_modelFiles列表中选择)
-    int tb_modelIdx = 0;
-    // 尝试找到当前config中的模型在列表中的位置
+    // 初始化GUI面板值
+    m_guiPanel.valSmooth = (int)(m_config.aimSmooth * 10);
+    m_guiPanel.valFov = (int)(m_config.aimFovRadius);
+    m_guiPanel.valHeadOff = (int)(m_config.headOffset * 100);
+    m_guiPanel.valKpX = (int)(m_config.KpX * 10);
+    m_guiPanel.valKdX = (int)(m_config.KdX * 10);
+    m_guiPanel.valPredX = (int)(m_config.PredictX * 100);
+    m_guiPanel.valRateX = (int)(m_config.RateX * 100);
+    m_guiPanel.valKpY = (int)(m_config.KpY * 10);
+    m_guiPanel.valKdY = (int)(m_config.KdY * 10);
+    m_guiPanel.valPredY = (int)(m_config.PredictY * 100);
+    m_guiPanel.valRateY = (int)(m_config.RateY * 100);
+    m_guiPanel.valConf = (int)(m_config.confThreshold * 100);
+    m_guiPanel.valNms = (int)(m_config.nmsThreshold * 100);
+    m_guiPanel.valYoloType = m_config.yoloMode;
+    m_guiPanel.valAimEnabled = m_config.aimEnabled ? 1 : 0;
+    m_guiPanel.valAimKey = m_config.aimKeyIndex;
+    m_guiPanel.valMoveMode = m_config.moveMode;
+    m_guiPanel.valPreview = m_config.enableDisplay ? 1 : 0;
+    // 找到模型在列表中的位置
+    m_guiPanel.valModelIdx = 0;
     for (int i = 0; i < (int)g_modelFiles.size(); i++) {
-        if (g_modelFiles[i] == m_config.modelPath) { tb_modelIdx = i; break; }
+        if (g_modelFiles[i] == m_config.modelPath) { m_guiPanel.valModelIdx = i; break; }
     }
-    int tb_yoloMode = m_config.yoloMode;
-    // 自瞄
-    int tb_aimEnabled = m_config.aimEnabled ? 1 : 0;
-    int tb_aimKeyIdx = m_config.aimKeyIndex;
-    int tb_aimSmooth = (int)(m_config.aimSmooth * 10);  // 0.1精度, 10-100 => 1.0-10.0
-    int tb_aimFov = (int)(m_config.aimFovRadius);
-    int tb_headOffset = (int)(m_config.headOffset * 100); // 0.01精度, 0-50
-    int tb_moveMode = m_config.moveMode;
-    int tb_display = m_config.enableDisplay ? 1 : 0;
 
-    // 创建trackbar
-    int maxModelIdx = std::max(0, (int)g_modelFiles.size() - 1);
-    cv::createTrackbar("Model File", winName, &tb_modelIdx, maxModelIdx);
-    cv::createTrackbar("YOLO Type", winName, &tb_yoloMode, YoloModeCount - 1);
-    cv::createTrackbar("Aim ON/OFF", winName, &tb_aimEnabled, 1);
-    cv::createTrackbar("Aim Key", winName, &tb_aimKeyIdx, AimKeyCount - 1);
-    cv::createTrackbar("Move Mode", winName, &tb_moveMode, 1);
-    cv::createTrackbar("Smooth x10", winName, &tb_aimSmooth, 100);
-    cv::createTrackbar("FOV Radius", winName, &tb_aimFov, 500);
-    cv::createTrackbar("HeadOff x100", winName, &tb_headOffset, 50);
-    cv::createTrackbar("KpX x10", winName, &tb_KpX, 1000);
-    cv::createTrackbar("KdX x10", winName, &tb_KdX, 1000);
-    cv::createTrackbar("PredX x100", winName, &tb_PredictX, 500);
-    cv::createTrackbar("RateX x100", winName, &tb_RateX, 100);
-    cv::createTrackbar("KpY x10", winName, &tb_KpY, 1000);
-    cv::createTrackbar("KdY x10", winName, &tb_KdY, 1000);
-    cv::createTrackbar("PredY x100", winName, &tb_PredictY, 500);
-    cv::createTrackbar("RateY x100", winName, &tb_RateY, 100);
-    cv::createTrackbar("Conf x100", winName, &tb_conf, 100);
-    cv::createTrackbar("NMS x100", winName, &tb_nms, 100);
-    cv::createTrackbar("Preview", winName, &tb_display, 1);
+    // 创建Win32 GUI面板
+    if (!m_guiPanel.Create(GetModuleHandle(nullptr))) {
+        std::cerr << "[AiMod] Failed to create GUI panel" << std::endl;
+        return;
+    }
 
-    while (m_running) {
-        // 从trackbar读取并更新config
+    // 填充模型下拉框
+    m_guiPanel.PopulateModelCombo(g_modelNames, m_guiPanel.valModelIdx);
+
+    // 设置按钮回调
+    m_guiPanel.onLoadModel = [this]() {
+        m_modelDirty.store(true, std::memory_order_release);
+        std::cout << "[AiMod] Model load requested: " << m_config.modelPath << std::endl;
+    };
+    m_guiPanel.onSaveConfig = [this]() {
+        SaveConfig(m_config);
+        std::cout << "[AiMod] Config saved to aimod_config.json" << std::endl;
+    };
+    m_guiPanel.onLoadConfig = [this]() {
+        m_config = LoadConfig();
+        // 同步GUI面板值
+        m_guiPanel.valSmooth = (int)(m_config.aimSmooth * 10);
+        m_guiPanel.valFov = (int)(m_config.aimFovRadius);
+        m_guiPanel.valHeadOff = (int)(m_config.headOffset * 100);
+        m_guiPanel.valKpX = (int)(m_config.KpX * 10);
+        m_guiPanel.valKdX = (int)(m_config.KdX * 10);
+        m_guiPanel.valPredX = (int)(m_config.PredictX * 100);
+        m_guiPanel.valRateX = (int)(m_config.RateX * 100);
+        m_guiPanel.valKpY = (int)(m_config.KpY * 10);
+        m_guiPanel.valKdY = (int)(m_config.KdY * 10);
+        m_guiPanel.valPredY = (int)(m_config.PredictY * 100);
+        m_guiPanel.valRateY = (int)(m_config.RateY * 100);
+        m_guiPanel.valConf = (int)(m_config.confThreshold * 100);
+        m_guiPanel.valNms = (int)(m_config.nmsThreshold * 100);
+        m_guiPanel.valYoloType = m_config.yoloMode;
+        m_guiPanel.valAimEnabled = m_config.aimEnabled ? 1 : 0;
+        m_guiPanel.valAimKey = m_config.aimKeyIndex;
+        m_guiPanel.valMoveMode = m_config.moveMode;
+        m_guiPanel.valPreview = m_config.enableDisplay ? 1 : 0;
+        m_guiPanel.valModelIdx = 0;
+        for (int i = 0; i < (int)g_modelFiles.size(); i++) {
+            if (g_modelFiles[i] == m_config.modelPath) { m_guiPanel.valModelIdx = i; break; }
+        }
+        m_guiPanel.SyncControlsFromValues();
+        m_pidDirty.store(true, std::memory_order_release);
+        std::cout << "[AiMod] Config loaded from aimod_config.json" << std::endl;
+    };
+    m_guiPanel.onQuit = [this]() {
+        m_running = false;
+    };
+
+    // GUI消息循环 + 定期同步config
+    MSG msg;
+    while (m_running && m_guiPanel.IsRunning()) {
+        // 处理Windows消息
+        while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) {
+                m_running = false;
+                break;
+            }
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+
+        // 从GUI面板值同步到config
         bool pidChanged = false;
-
-        float newKpX = tb_KpX / 10.0f;
-        float newKdX = tb_KdX / 10.0f;
-        float newPredictX = tb_PredictX / 100.0f;
-        float newRateX = tb_RateX / 100.0f;
-        float newKpY = tb_KpY / 10.0f;
-        float newKdY = tb_KdY / 10.0f;
-        float newPredictY = tb_PredictY / 100.0f;
-        float newRateY = tb_RateY / 100.0f;
+        float newKpX = m_guiPanel.valKpX / 10.0f;
+        float newKdX = m_guiPanel.valKdX / 10.0f;
+        float newPredX = m_guiPanel.valPredX / 100.0f;
+        float newRateX = m_guiPanel.valRateX / 100.0f;
+        float newKpY = m_guiPanel.valKpY / 10.0f;
+        float newKdY = m_guiPanel.valKdY / 10.0f;
+        float newPredY = m_guiPanel.valPredY / 100.0f;
+        float newRateY = m_guiPanel.valRateY / 100.0f;
 
         if (newKpX != m_config.KpX || newKdX != m_config.KdX ||
-            newPredictX != m_config.PredictX || newRateX != m_config.RateX ||
+            newPredX != m_config.PredictX || newRateX != m_config.RateX ||
             newKpY != m_config.KpY || newKdY != m_config.KdY ||
-            newPredictY != m_config.PredictY || newRateY != m_config.RateY) {
+            newPredY != m_config.PredictY || newRateY != m_config.RateY) {
             pidChanged = true;
         }
 
-        m_config.KpX = newKpX;
-        m_config.KdX = newKdX;
-        m_config.PredictX = newPredictX;
-        m_config.RateX = newRateX;
-        m_config.KpY = newKpY;
-        m_config.KdY = newKdY;
-        m_config.PredictY = newPredictY;
-        m_config.RateY = newRateY;
+        m_config.KpX = newKpX; m_config.KdX = newKdX;
+        m_config.PredictX = newPredX; m_config.RateX = newRateX;
+        m_config.KpY = newKpY; m_config.KdY = newKdY;
+        m_config.PredictY = newPredY; m_config.RateY = newRateY;
+        m_config.confThreshold = m_guiPanel.valConf / 100.0f;
+        m_config.nmsThreshold = m_guiPanel.valNms / 100.0f;
+        m_config.aimEnabled = (m_guiPanel.valAimEnabled != 0);
+        m_config.aimKeyIndex = m_guiPanel.valAimKey;
+        m_config.aimSmooth = std::max(m_guiPanel.valSmooth / 10.0f, 0.1f);
+        m_config.aimFovRadius = (float)m_guiPanel.valFov;
+        m_config.headOffset = m_guiPanel.valHeadOff / 100.0f;
+        m_config.moveMode = m_guiPanel.valMoveMode;
+        m_config.enableDisplay = (m_guiPanel.valPreview != 0);
+        m_config.yoloMode = m_guiPanel.valYoloType;
 
-        m_config.confThreshold = tb_conf / 100.0f;
-        m_config.nmsThreshold = tb_nms / 100.0f;
-        m_config.aimEnabled = (tb_aimEnabled != 0);
-        m_config.aimKeyIndex = tb_aimKeyIdx;
-        m_config.aimSmooth = std::max(tb_aimSmooth / 10.0f, 0.1f);
-        m_config.aimFovRadius = (float)tb_aimFov;
-        m_config.headOffset = tb_headOffset / 100.0f;
-        m_config.moveMode = tb_moveMode;
-        m_config.enableDisplay = (tb_display != 0);
-
-        // 模型类型变更
-        m_config.yoloMode = tb_yoloMode;
-
-        // 模型文件选择更新
-        if (!g_modelFiles.empty() && tb_modelIdx >= 0 && tb_modelIdx < (int)g_modelFiles.size()) {
-            m_config.modelPath = g_modelFiles[tb_modelIdx];
+        if (!g_modelFiles.empty() && m_guiPanel.valModelIdx >= 0 &&
+            m_guiPanel.valModelIdx < (int)g_modelFiles.size()) {
+            m_config.modelPath = g_modelFiles[m_guiPanel.valModelIdx];
         }
 
         if (pidChanged) {
             m_pidDirty.store(true, std::memory_order_release);
         }
 
-        // 绘制状态信息面板
-        cv::Mat panel(480, 500, CV_8UC3, cv::Scalar(30, 30, 30));
-        int y = 25;
-        auto putLine = [&](const std::string& text, cv::Scalar color = cv::Scalar(200, 200, 200)) {
-            cv::putText(panel, text, cv::Point(15, y), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
-            y += 22;
-        };
+        // 更新状态文本
+        std::string status = m_modelLoaded.load() ? "Model: LOADED" : "Model: NOT LOADED";
+        m_guiPanel.SetStatusText(status);
 
-        putLine("=== AiMod Control Panel ===", cv::Scalar(0, 255, 255));
+        std::ostringstream fps;
+        fps << std::fixed << std::setprecision(1)
+            << "Cap:" << m_captureFPS.load()
+            << "  Det:" << m_detectionFPS.load()
+            << "  Time:" << std::setprecision(1) << m_avgDetectionTime.load() << "ms";
+        m_guiPanel.SetFpsText(fps.str());
 
-        // 模型状态
-        std::string modelStatus = m_modelLoaded.load() ? "[LOADED]" : "[NOT LOADED]";
-        cv::Scalar modelColor = m_modelLoaded.load() ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255);
-        putLine("Status: " + modelStatus, modelColor);
-
-        // 当前选中的模型文件名
-        std::string selectedModel = "(none)";
-        if (!g_modelFiles.empty() && tb_modelIdx >= 0 && tb_modelIdx < (int)g_modelNames.size()) {
-            selectedModel = g_modelNames[tb_modelIdx];
-        }
-        putLine("Model[" + std::to_string(tb_modelIdx) + "]: " + selectedModel, cv::Scalar(255, 200, 100));
-        putLine("Type: " + std::string(YoloModeNames[m_config.yoloMode % YoloModeCount]), cv::Scalar(255, 200, 100));
-        putLine("");
-        putLine("Aim: " + std::string(m_config.aimEnabled ? "ON" : "OFF"),
-                m_config.aimEnabled ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 0, 255));
-        putLine("Aim Key: " + std::string(AimKeyNames[m_config.aimKeyIndex % AimKeyCount]),
-                cv::Scalar(200, 200, 255));
-        putLine("Move: " + std::string(m_config.moveMode == 0 ? "Curve" : "Direct"));
-        putLine("Smooth: " + std::to_string(m_config.aimSmooth).substr(0, 4));
-        putLine("FOV: " + std::to_string((int)m_config.aimFovRadius) + " px");
-        putLine("HeadOffset: " + std::to_string(m_config.headOffset).substr(0, 4));
-        putLine("");
-        putLine("--- PID X ---", cv::Scalar(100, 255, 100));
-        putLine("Kp=" + std::to_string(m_config.KpX).substr(0, 5) +
-               " Kd=" + std::to_string(m_config.KdX).substr(0, 5));
-        putLine("Predict=" + std::to_string(m_config.PredictX).substr(0, 5) +
-               " Rate=" + std::to_string(m_config.RateX).substr(0, 4));
-        putLine("--- PID Y ---", cv::Scalar(100, 255, 100));
-        putLine("Kp=" + std::to_string(m_config.KpY).substr(0, 5) +
-               " Kd=" + std::to_string(m_config.KdY).substr(0, 5));
-        putLine("Predict=" + std::to_string(m_config.PredictY).substr(0, 5) +
-               " Rate=" + std::to_string(m_config.RateY).substr(0, 4));
-        putLine("");
-        putLine("Conf: " + std::to_string(m_config.confThreshold).substr(0, 4) +
-               "  NMS: " + std::to_string(m_config.nmsThreshold).substr(0, 4));
-        putLine("Capture FPS: " + std::to_string(m_captureFPS.load()).substr(0, 5));
-        putLine("Detection FPS: " + std::to_string(m_detectionFPS.load()).substr(0, 5));
-        putLine("Det Time: " + std::to_string(m_avgDetectionTime.load()).substr(0, 5) + " ms");
-        putLine("");
-        putLine("[Ctrl+R] Load Model  [Ctrl+S] Save  [Ctrl+L] Load  [ESC] Quit", cv::Scalar(0, 200, 255));
-
-        cv::imshow(winName, panel);
-
-        int key = cv::waitKey(50);
-        // ESC 只在OpenCV窗口有焦点时生效，防止游戏内按ESC误退出
-        if (key == 27) {
-            m_running = false;
-            break;
-        }
-
-        // Ctrl+R/S/L 全局热键，不需要窗口焦点，不会跟游戏按键冲突
-        static bool prevR = false, prevS = false, prevL = false;
-        bool ctrlDown = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-        bool curR = ctrlDown && (GetAsyncKeyState('R') & 0x8000) != 0;
-        bool curS = ctrlDown && (GetAsyncKeyState('S') & 0x8000) != 0;
-        bool curL = ctrlDown && (GetAsyncKeyState('L') & 0x8000) != 0;
-
-        if (curS && !prevS) {
-            SaveConfig(m_config);
-            std::cout << "[AiMod] Config saved to aimod_config.json" << std::endl;
-        } else if (curR && !prevR) {
-            // 请求推理线程重载模型
-            m_modelDirty.store(true, std::memory_order_release);
-            std::cout << "[AiMod] Model load requested: " << m_config.modelPath << std::endl;
-        } else if (curL && !prevL) {
-            m_config = LoadConfig();
-            // 同步trackbar
-            tb_KpX = (int)(m_config.KpX * 10);
-            tb_KdX = (int)(m_config.KdX * 10);
-            tb_PredictX = (int)(m_config.PredictX * 100);
-            tb_RateX = (int)(m_config.RateX * 100);
-            tb_KpY = (int)(m_config.KpY * 10);
-            tb_KdY = (int)(m_config.KdY * 10);
-            tb_PredictY = (int)(m_config.PredictY * 100);
-            tb_RateY = (int)(m_config.RateY * 100);
-            tb_conf = (int)(m_config.confThreshold * 100);
-            tb_nms = (int)(m_config.nmsThreshold * 100);
-            tb_aimEnabled = m_config.aimEnabled ? 1 : 0;
-            tb_aimKeyIdx = m_config.aimKeyIndex;
-            tb_aimSmooth = (int)(m_config.aimSmooth * 10);
-            tb_aimFov = (int)(m_config.aimFovRadius);
-            tb_headOffset = (int)(m_config.headOffset * 100);
-            tb_moveMode = m_config.moveMode;
-            tb_display = m_config.enableDisplay ? 1 : 0;
-            tb_yoloMode = m_config.yoloMode;
-            // 找到模型在列表中的位置
-            for (int i = 0; i < (int)g_modelFiles.size(); i++) {
-                if (g_modelFiles[i] == m_config.modelPath) { tb_modelIdx = i; break; }
-            }
-
-            cv::setTrackbarPos("Model File", winName, tb_modelIdx);
-            cv::setTrackbarPos("YOLO Type", winName, tb_yoloMode);
-            cv::setTrackbarPos("KpX x10", winName, tb_KpX);
-            cv::setTrackbarPos("KdX x10", winName, tb_KdX);
-            cv::setTrackbarPos("PredX x100", winName, tb_PredictX);
-            cv::setTrackbarPos("RateX x100", winName, tb_RateX);
-            cv::setTrackbarPos("KpY x10", winName, tb_KpY);
-            cv::setTrackbarPos("KdY x10", winName, tb_KdY);
-            cv::setTrackbarPos("PredY x100", winName, tb_PredictY);
-            cv::setTrackbarPos("RateY x100", winName, tb_RateY);
-            cv::setTrackbarPos("Conf x100", winName, tb_conf);
-            cv::setTrackbarPos("NMS x100", winName, tb_nms);
-            cv::setTrackbarPos("Aim ON/OFF", winName, tb_aimEnabled);
-            cv::setTrackbarPos("Aim Key", winName, tb_aimKeyIdx);
-            cv::setTrackbarPos("Smooth x10", winName, tb_aimSmooth);
-            cv::setTrackbarPos("FOV Radius", winName, tb_aimFov);
-            cv::setTrackbarPos("HeadOff x100", winName, tb_headOffset);
-            cv::setTrackbarPos("Move Mode", winName, tb_moveMode);
-            cv::setTrackbarPos("Preview", winName, tb_display);
-
-            m_pidDirty.store(true, std::memory_order_release);
-            std::cout << "[AiMod] Config loaded from aimod_config.json" << std::endl;
-        }
-
-        prevR = curR; prevS = curS; prevL = curL;
+        Sleep(50);
     }
 
-    cv::destroyWindow(winName);
+    m_guiPanel.Destroy();
 }
 
 void DetectionSystem::Release() {

@@ -161,6 +161,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AiMod.cpp" />
+    <ClCompile Include="Win32Gui.cpp" />
     <ClCompile Include="cap\DXScreenCapture.cpp" />
     <ClCompile Include="cap\GDIScreenCapture.cpp" />
     <ClCompile Include="cap\obs.cpp" />
