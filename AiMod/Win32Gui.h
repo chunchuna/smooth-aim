@@ -4,6 +4,8 @@
 #pragma comment(lib, "comctl32.lib")
 #include <string>
 #include <vector>
+#include <map>
+#include <set>
 #include <functional>
 
 // Win32 native GUI control panel (replaces OpenCV trackbar GUI)
@@ -48,6 +50,22 @@ enum GuiCtrlID {
     // status labels
     ID_LABEL_STATUS = 1300,
     ID_LABEL_FPS,
+    ID_LABEL_DEVICE,
+    // recoil controls
+    ID_COMBO_RECOIL_WEAPON = 1400,
+    ID_SLIDER_RECOIL_STRENGTH,
+    ID_SLIDER_RECOIL_SMOOTH,
+    ID_SLIDER_RECOIL_HOLDMS,
+    ID_SLIDER_RECOIL_TIMEOFF,
+    ID_CHECK_RECOIL_ENABLED,
+    ID_LABEL_RECOIL_STRENGTH,
+    ID_LABEL_RECOIL_SMOOTH,
+    ID_LABEL_RECOIL_HOLDMS,
+    ID_LABEL_RECOIL_TIMEOFF,
+    // class filter checkboxes start at this ID
+    ID_CHECK_CLASS_BASE = 1500,
+    ID_BTN_CLASS_ALL = 1600,
+    ID_BTN_CLASS_NONE,
 };
 
 class Win32GuiPanel {
@@ -64,9 +82,14 @@ public:
 
     void SetStatusText(const std::string& text);
     void SetFpsText(const std::string& text);
+    void SetDeviceText(const std::string& text);
     void PopulateModelCombo(const std::vector<std::string>& names, int sel);
     void SyncControlsFromValues();
     void MessageLoop();
+
+    // Class filter: rebuild checkboxes when model changes
+    void RebuildClassFilter(const std::map<int, std::string>& classNames);
+    std::set<int> GetEnabledClassIds() const;
 
     // GUI value bindings (read by main loop to sync config)
     int valSmooth = 10, valFov = 300, valHeadOff = 20;
@@ -75,6 +98,14 @@ public:
     int valConf = 50, valNms = 50;
     int valModelIdx = 0, valYoloType = 0, valAimKey = 0, valMoveMode = 0;
     int valAimEnabled = 1, valPreview = 1;
+
+    // Recoil config values
+    int valRecoilEnabled = 0;
+    int valRecoilWeapon = 0;    // index into weapon list (last = Off)
+    int valRecoilStrength = 10; // *0.1 = 1.0
+    int valRecoilSmooth = 4;
+    int valRecoilHoldMs = 100;
+    int valRecoilTimeOff = 0;
 
 private:
     HWND m_hwnd = nullptr;
@@ -94,6 +125,15 @@ private:
         HWND hValueLabel;
     };
     std::vector<SliderInfo> m_sliders;
+
+    // Class filter state
+    struct ClassCheckInfo {
+        int classId;
+        HWND hCheck;
+    };
+    std::vector<ClassCheckInfo> m_classChecks;
+
+    int m_controlsEndY = 0; // track Y position after main controls
 
     void CreateControls();
     void UpdateSliderLabel(SliderInfo& si);

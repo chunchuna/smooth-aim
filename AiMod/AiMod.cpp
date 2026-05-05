@@ -5,6 +5,7 @@
 #include <string>
 #include <atomic>
 #include <algorithm>
+#include <set>
 #include <thread>
 #include <chrono>
 #include <iostream>
@@ -23,6 +24,7 @@
 #include "curve.h"
 #include "pid.h"
 #include "Win32Gui.h"
+#include "RecoilControl.h"
 
 // ============================================================
 // 模型文件扫描
@@ -338,6 +340,13 @@ private:
 
     // Win32 原生GUI面板
     Win32GuiPanel m_guiPanel;
+
+    // Recoil control engine
+    RecoilController m_recoil;
+
+    // Class filter: enabled class IDs (empty = all pass)
+    std::set<int> m_enabledClasses;
+    std::atomic<bool> m_classFilterDirty{false};
 };
 
 DetectionSystem::~DetectionSystem() {
@@ -401,6 +410,8 @@ bool DetectionSystem::LoadModel() {
     }
     if (m_detector.Init(m_config.modelPath, m_config.yoloDevice, m_config.yoloMode)) {
         m_modelLoaded = true;
+        m_detector.ReadClassNames();
+        m_classFilterDirty.store(true, std::memory_order_release);
         std::cout << "[AiMod] Model loaded: " << m_config.modelPath << std::endl;
         return true;
     }
@@ -557,6 +568,16 @@ void DetectionSystem::DetectionLoop() {
         auto detectEnd = std::chrono::high_resolution_clock::now();
         double detectionTime = std::chrono::duration<double, std::milli>(detectEnd - detectStart).count();
 
+        // Apply class filter (if any classes are unchecked)
+        if (!m_enabledClasses.empty()) {
+            m_detectResults.erase(
+                std::remove_if(m_detectResults.begin(), m_detectResults.end(),
+                    [this](const DetectionObject& obj) {
+                        return m_enabledClasses.find(obj.label) == m_enabledClasses.end();
+                    }),
+                m_detectResults.end());
+        }
+
         m_tracker.predict(m_detectResults, m_trackedResults);
 
         auto newResults = std::make_shared<std::vector<DetectionObject>>(std::move(m_trackedResults));
@@ -646,6 +667,12 @@ void DetectionSystem::DetectionLoop() {
                 m_pidX.reset();
                 m_pidY.reset();
             }
+        }
+
+        // Recoil compensation (runs independently of aim assist)
+        auto [rcX, rcY] = m_recoil.Update();
+        if (rcX != 0 || rcY != 0) {
+            MoveMouse(rcX, rcY);
         }
 
         frameCount++;
@@ -811,6 +838,22 @@ void DetectionSystem::GuiLoop() {
     // 填充模型下拉框
     m_guiPanel.PopulateModelCombo(g_modelNames, m_guiPanel.valModelIdx);
 
+    // 填充武器下拉框
+    {
+        auto weaponNames = GetWeaponNames();
+        HWND hRcCombo = GetDlgItem(m_guiPanel.GetHwnd(), ID_COMBO_RECOIL_WEAPON);
+        for (auto& wn : weaponNames) {
+            SendMessageA(hRcCombo, CB_ADDSTRING, 0, (LPARAM)wn.c_str());
+        }
+        // Default to "Off" (last entry)
+        m_guiPanel.valRecoilWeapon = (int)weaponNames.size() - 1;
+        SendMessage(hRcCombo, CB_SETCURSEL, m_guiPanel.valRecoilWeapon, 0);
+    }
+
+    // Show device info
+    m_guiPanel.SetDeviceText(std::string("Device: GPU (DirectML device ") +
+        std::to_string(m_config.yoloDevice) + ")");
+
     // 设置按钮回调
     m_guiPanel.onLoadModel = [this]() {
         m_modelDirty.store(true, std::memory_order_release);
@@ -907,6 +950,23 @@ void DetectionSystem::GuiLoop() {
         if (pidChanged) {
             m_pidDirty.store(true, std::memory_order_release);
         }
+
+        // Sync recoil params from GUI to engine
+        m_recoil.enabled = (m_guiPanel.valRecoilEnabled != 0);
+        m_recoil.weaponIndex = m_guiPanel.valRecoilWeapon;
+        m_recoil.strength = m_guiPanel.valRecoilStrength / 10.0f;
+        m_recoil.smoothSteps = m_guiPanel.valRecoilSmooth;
+        m_recoil.holdDelayMs = m_guiPanel.valRecoilHoldMs;
+        m_recoil.timeOffsetMs = m_guiPanel.valRecoilTimeOff;
+
+        // Update class filter checkboxes when model changes
+        if (m_classFilterDirty.exchange(false, std::memory_order_acquire)) {
+            auto& names = m_detector.GetClassNames();
+            m_guiPanel.RebuildClassFilter(names);
+        }
+
+        // Read class filter from GUI checkboxes
+        m_enabledClasses = m_guiPanel.GetEnabledClassIds();
 
         // 更新状态文本
         std::string status = m_modelLoaded.load() ? "Model: LOADED" : "Model: NOT LOADED";

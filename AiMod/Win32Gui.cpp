@@ -52,7 +52,7 @@ bool Win32GuiPanel::Create(HINSTANCE hInst) {
     m_hwnd = CreateWindowExW(
         0, CLASS_NAME, L"AiMod Control Panel",
         WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, 480, 820,
+        CW_USEDEFAULT, CW_USEDEFAULT, 500, 1100,
         nullptr, nullptr, hInst, this
     );
 
@@ -196,15 +196,43 @@ void Win32GuiPanel::CreateControls() {
     addSlider("NMS:",       ID_SLIDER_NMS,    0, 100, &valNms,   0.01f, "");
     y += 12;
 
-    // Buttons
-    MakeBtn(m_hwnd, m_font, "Save Config", x, y, 100, 28, ID_BTN_SAVE);
-    MakeBtn(m_hwnd, m_font, "Load Config", x + 110, y, 100, 28, ID_BTN_LOAD_CONFIG);
-    y += 36;
-
-    // Status labels
-    MakeLabel(m_hwnd, m_font, "Status: Ready", x, y, 440, 18, ID_LABEL_STATUS);
+    // === Recoil Section ===
+    MakeLabel(m_hwnd, m_font, "--- Recoil Control ---", x, y, 200, 18);
     y += 20;
-    MakeLabel(m_hwnd, m_font, "", x, y, 440, 18, ID_LABEL_FPS);
+    MakeCheck(m_hwnd, m_font, "Recoil Enabled", x, y, 130, 20, ID_CHECK_RECOIL_ENABLED, valRecoilEnabled != 0);
+    y += rowH;
+
+    MakeLabel(m_hwnd, m_font, "Weapon:", x, y + 3, 55, 20);
+    // Weapon combo populated externally
+    CreateWindowA("COMBOBOX", "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+        x + 60, y, 200, comboH, m_hwnd, (HMENU)(INT_PTR)ID_COMBO_RECOIL_WEAPON, nullptr, nullptr);
+    HWND hRcCombo = GetDlgItem(m_hwnd, ID_COMBO_RECOIL_WEAPON);
+    SendMessage(hRcCombo, WM_SETFONT, (WPARAM)m_font, TRUE);
+    y += rowH;
+
+    addSlider("Strength:", ID_SLIDER_RECOIL_STRENGTH, 1, 30, &valRecoilStrength, 0.1f, "");
+    addSlider("Smooth:",   ID_SLIDER_RECOIL_SMOOTH,   1, 16, &valRecoilSmooth,   1.0f, "");
+    addSlider("Hold ms:",  ID_SLIDER_RECOIL_HOLDMS,   0, 500, &valRecoilHoldMs,  1.0f, "ms");
+    addSlider("TimeOff:",  ID_SLIDER_RECOIL_TIMEOFF, -100, 100, &valRecoilTimeOff, 1.0f, "ms");
+    y += 12;
+
+    // === Class Filter (placeholder, rebuilt on model load) ===
+    MakeLabel(m_hwnd, m_font, "--- Class Filter ---", x, y, 200, 18);
+    y += 20;
+    MakeBtn(m_hwnd, m_font, "All", x, y, 50, 22, ID_BTN_CLASS_ALL);
+    MakeBtn(m_hwnd, m_font, "None", x + 55, y, 50, 22, ID_BTN_CLASS_NONE);
+    y += 26;
+    m_controlsEndY = y; // class checkboxes are added dynamically below this
+    y += 12;
+
+    // === Buttons ===
+    MakeBtn(m_hwnd, m_font, "Save Config", x, y + 100, 100, 28, ID_BTN_SAVE);
+    MakeBtn(m_hwnd, m_font, "Load Config", x + 110, y + 100, 100, 28, ID_BTN_LOAD_CONFIG);
+
+    // === Status labels (at bottom) ===
+    MakeLabel(m_hwnd, m_font, "Status: Ready", x, y + 140, 460, 18, ID_LABEL_STATUS);
+    MakeLabel(m_hwnd, m_font, "", x, y + 160, 460, 18, ID_LABEL_FPS);
+    MakeLabel(m_hwnd, m_font, "Device: Unknown", x, y + 180, 460, 18, ID_LABEL_DEVICE);
 }
 
 void Win32GuiPanel::UpdateSliderLabel(SliderInfo& si) {
@@ -267,6 +295,22 @@ void Win32GuiPanel::OnCommand(WPARAM wParam) {
     case ID_CHECK_PREVIEW:
         valPreview = (SendMessage(GetDlgItem(m_hwnd, ID_CHECK_PREVIEW), BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
         break;
+    case ID_CHECK_RECOIL_ENABLED:
+        valRecoilEnabled = (SendMessage(GetDlgItem(m_hwnd, ID_CHECK_RECOIL_ENABLED), BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
+        break;
+    case ID_COMBO_RECOIL_WEAPON:
+        if (notif == CBN_SELCHANGE) {
+            valRecoilWeapon = (int)SendMessage(GetDlgItem(m_hwnd, ID_COMBO_RECOIL_WEAPON), CB_GETCURSEL, 0, 0);
+        }
+        break;
+    case ID_BTN_CLASS_ALL:
+        for (auto& cc : m_classChecks)
+            SendMessage(cc.hCheck, BM_SETCHECK, BST_CHECKED, 0);
+        break;
+    case ID_BTN_CLASS_NONE:
+        for (auto& cc : m_classChecks)
+            SendMessage(cc.hCheck, BM_SETCHECK, BST_UNCHECKED, 0);
+        break;
     }
 }
 
@@ -276,6 +320,46 @@ void Win32GuiPanel::SetStatusText(const std::string& text) {
 
 void Win32GuiPanel::SetFpsText(const std::string& text) {
     if (m_hwnd) SetWindowTextA(GetDlgItem(m_hwnd, ID_LABEL_FPS), text.c_str());
+}
+
+void Win32GuiPanel::SetDeviceText(const std::string& text) {
+    if (m_hwnd) SetWindowTextA(GetDlgItem(m_hwnd, ID_LABEL_DEVICE), text.c_str());
+}
+
+void Win32GuiPanel::RebuildClassFilter(const std::map<int, std::string>& classNames) {
+    // Destroy old checkboxes
+    for (auto& cc : m_classChecks) {
+        if (cc.hCheck) DestroyWindow(cc.hCheck);
+    }
+    m_classChecks.clear();
+
+    if (!m_hwnd || classNames.empty()) return;
+
+    int x = 10;
+    int y = m_controlsEndY;
+    int col = 0;
+    for (auto& kv : classNames) {
+        char label[128];
+        snprintf(label, sizeof(label), "%d: %s", kv.first, kv.second.c_str());
+        int cx = x + col * 150;
+        HWND hc = CreateWindowA("BUTTON", label, WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+            cx, y, 145, 18, m_hwnd, (HMENU)(INT_PTR)(ID_CHECK_CLASS_BASE + kv.first), nullptr, nullptr);
+        SendMessage(hc, WM_SETFONT, (WPARAM)m_font, TRUE);
+        SendMessage(hc, BM_SETCHECK, BST_CHECKED, 0); // default: all enabled
+        m_classChecks.push_back({kv.first, hc});
+        col++;
+        if (col >= 3) { col = 0; y += 20; }
+    }
+}
+
+std::set<int> Win32GuiPanel::GetEnabledClassIds() const {
+    std::set<int> enabled;
+    for (auto& cc : m_classChecks) {
+        if (SendMessage(cc.hCheck, BM_GETCHECK, 0, 0) == BST_CHECKED) {
+            enabled.insert(cc.classId);
+        }
+    }
+    return enabled;
 }
 
 void Win32GuiPanel::SyncControlsFromValues() {
@@ -290,11 +374,14 @@ void Win32GuiPanel::SyncControlsFromValues() {
     SendMessage(GetDlgItem(m_hwnd, ID_COMBO_YOLOTYPE), CB_SETCURSEL, valYoloType, 0);
     SendMessage(GetDlgItem(m_hwnd, ID_COMBO_AIMKEY), CB_SETCURSEL, valAimKey, 0);
     SendMessage(GetDlgItem(m_hwnd, ID_COMBO_MOVEMODE), CB_SETCURSEL, valMoveMode, 0);
+    SendMessage(GetDlgItem(m_hwnd, ID_COMBO_RECOIL_WEAPON), CB_SETCURSEL, valRecoilWeapon, 0);
 
     SendMessage(GetDlgItem(m_hwnd, ID_CHECK_AIM), BM_SETCHECK,
         valAimEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessage(GetDlgItem(m_hwnd, ID_CHECK_PREVIEW), BM_SETCHECK,
         valPreview ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessage(GetDlgItem(m_hwnd, ID_CHECK_RECOIL_ENABLED), BM_SETCHECK,
+        valRecoilEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
 }
 
 void Win32GuiPanel::MessageLoop() {

@@ -98,6 +98,18 @@ void YoloDetect::Detect(const unsigned char* imageData, int width, int height, f
     detector->DetectBGR(imageData, width, height, confThreshold, nmsThreshold, output);
 }
 
+std::map<int, std::string> YoloDetect::ReadClassNames() {
+    static const std::map<int, std::string> empty;
+    if (!detector) return empty;
+    return detector->ReadClassNames();
+}
+
+const std::map<int, std::string>& YoloDetect::GetClassNames() const {
+    static const std::map<int, std::string> empty;
+    if (!detector) return empty;
+    return detector->GetClassNames();
+}
+
 void YoloDetect::Reset() {
     Release();
 }
