@@ -979,6 +979,12 @@ void DetectionSystem::GuiLoop() {
             << "  Time:" << std::setprecision(1) << m_avgDetectionTime.load() << "ms";
         m_guiPanel.SetFpsText(fps.str());
 
+        // Device info (DirectML = GPU, device index from config)
+        std::string devText = std::string("Device: GPU (DirectML adapter ") +
+            std::to_string(m_config.yoloDevice) + ")";
+        if (!m_modelLoaded.load()) devText = "Device: N/A (no model)";
+        m_guiPanel.SetDeviceText(devText);
+
         Sleep(50);
     }
 

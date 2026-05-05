@@ -20,6 +20,15 @@ LRESULT CALLBACK Win32GuiPanel::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
     case WM_HSCROLL:
         self->OnHScroll((HWND)lParam);
         return 0;
+    case WM_VSCROLL:
+        self->OnVScroll(wParam);
+        return 0;
+    case WM_MOUSEWHEEL:
+        self->OnMouseWheel(GET_WHEEL_DELTA_WPARAM(wParam));
+        return 0;
+    case WM_SIZE:
+        self->UpdateScrollBar();
+        return 0;
     case WM_COMMAND:
         self->OnCommand(wParam);
         return 0;
@@ -51,8 +60,8 @@ bool Win32GuiPanel::Create(HINSTANCE hInst) {
 
     m_hwnd = CreateWindowExW(
         0, CLASS_NAME, L"AiMod Control Panel",
-        WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, 500, 1100,
+        (WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX) | WS_VSCROLL,
+        CW_USEDEFAULT, CW_USEDEFAULT, 500, 800,
         nullptr, nullptr, hInst, this
     );
 
@@ -154,8 +163,9 @@ void Win32GuiPanel::CreateControls() {
     y += rowH + 8;
 
     // Slider helper
+    int nextAutoLabelId = 2000;
     auto addSlider = [&](const char* label, int id, int minV, int maxV, int* valPtr, float scale, const char* unit) {
-        int labelId = id - ID_SLIDER_SMOOTH + ID_LABEL_SMOOTH;
+        int labelId = nextAutoLabelId++;
         HWND hLbl = MakeLabel(m_hwnd, m_font, label, x, y + 5, labelW, 18);
         HWND hSlider = MakeSlider(m_hwnd, x + labelW, y, sliderW, 25, id, minV, maxV, *valPtr);
         HWND hVal = MakeLabel(m_hwnd, m_font, "", x + labelW + sliderW + 5, y + 5, valW, 18, labelId);
@@ -226,13 +236,20 @@ void Win32GuiPanel::CreateControls() {
     y += 12;
 
     // === Buttons ===
-    MakeBtn(m_hwnd, m_font, "Save Config", x, y + 100, 100, 28, ID_BTN_SAVE);
-    MakeBtn(m_hwnd, m_font, "Load Config", x + 110, y + 100, 100, 28, ID_BTN_LOAD_CONFIG);
+    MakeBtn(m_hwnd, m_font, "Save Config", x, y, 100, 28, ID_BTN_SAVE);
+    MakeBtn(m_hwnd, m_font, "Load Config", x + 110, y, 100, 28, ID_BTN_LOAD_CONFIG);
+    y += 36;
 
-    // === Status labels (at bottom) ===
-    MakeLabel(m_hwnd, m_font, "Status: Ready", x, y + 140, 460, 18, ID_LABEL_STATUS);
-    MakeLabel(m_hwnd, m_font, "", x, y + 160, 460, 18, ID_LABEL_FPS);
-    MakeLabel(m_hwnd, m_font, "Device: Unknown", x, y + 180, 460, 18, ID_LABEL_DEVICE);
+    // === Status labels ===
+    MakeLabel(m_hwnd, m_font, "Status: Ready", x, y, 460, 18, ID_LABEL_STATUS);
+    y += 20;
+    MakeLabel(m_hwnd, m_font, "", x, y, 460, 18, ID_LABEL_FPS);
+    y += 20;
+    MakeLabel(m_hwnd, m_font, "Device: Unknown", x, y, 460, 18, ID_LABEL_DEVICE);
+    y += 24;
+
+    m_totalContentH = y;
+    UpdateScrollBar();
 }
 
 void Win32GuiPanel::UpdateSliderLabel(SliderInfo& si) {
@@ -360,6 +377,72 @@ std::set<int> Win32GuiPanel::GetEnabledClassIds() const {
         }
     }
     return enabled;
+}
+
+void Win32GuiPanel::UpdateScrollBar() {
+    if (!m_hwnd) return;
+    RECT rc;
+    GetClientRect(m_hwnd, &rc);
+    int clientH = rc.bottom - rc.top;
+
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMin = 0;
+    si.nMax = m_totalContentH;
+    si.nPage = clientH;
+    si.nPos = m_scrollY;
+    SetScrollInfo(m_hwnd, SB_VERT, &si, TRUE);
+}
+
+void Win32GuiPanel::OnVScroll(WPARAM wParam) {
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask = SIF_ALL;
+    GetScrollInfo(m_hwnd, SB_VERT, &si);
+
+    int oldPos = si.nPos;
+    switch (LOWORD(wParam)) {
+    case SB_LINEUP:        si.nPos -= 20; break;
+    case SB_LINEDOWN:      si.nPos += 20; break;
+    case SB_PAGEUP:        si.nPos -= si.nPage; break;
+    case SB_PAGEDOWN:      si.nPos += si.nPage; break;
+    case SB_THUMBTRACK:    si.nPos = si.nTrackPos; break;
+    }
+
+    si.nPos = max(si.nPos, 0);
+    int maxScroll = max((int)(si.nMax - (int)si.nPage), 0);
+    si.nPos = min(si.nPos, maxScroll);
+
+    if (si.nPos != oldPos) {
+        int delta = oldPos - si.nPos;
+        m_scrollY = si.nPos;
+        ScrollWindow(m_hwnd, 0, delta, nullptr, nullptr);
+        SetScrollPos(m_hwnd, SB_VERT, m_scrollY, TRUE);
+        UpdateWindow(m_hwnd);
+    }
+}
+
+void Win32GuiPanel::OnMouseWheel(short delta) {
+    int scroll = -delta / 2; // 120 units per notch, scroll ~60px per notch
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask = SIF_ALL;
+    GetScrollInfo(m_hwnd, SB_VERT, &si);
+
+    int oldPos = si.nPos;
+    si.nPos += scroll;
+    si.nPos = max(si.nPos, 0);
+    int maxScroll = max((int)(si.nMax - (int)si.nPage), 0);
+    si.nPos = min(si.nPos, maxScroll);
+
+    if (si.nPos != oldPos) {
+        int delta2 = oldPos - si.nPos;
+        m_scrollY = si.nPos;
+        ScrollWindow(m_hwnd, 0, delta2, nullptr, nullptr);
+        SetScrollPos(m_hwnd, SB_VERT, m_scrollY, TRUE);
+        UpdateWindow(m_hwnd);
+    }
 }
 
 void Win32GuiPanel::SyncControlsFromValues() {

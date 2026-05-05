@@ -134,11 +134,16 @@ private:
     std::vector<ClassCheckInfo> m_classChecks;
 
     int m_controlsEndY = 0; // track Y position after main controls
+    int m_totalContentH = 0; // total height of all controls
+    int m_scrollY = 0;       // current scroll offset
 
     void CreateControls();
     void UpdateSliderLabel(SliderInfo& si);
     void OnHScroll(HWND hCtrl);
     void OnCommand(WPARAM wParam);
+    void OnVScroll(WPARAM wParam);
+    void OnMouseWheel(short delta);
+    void UpdateScrollBar();
 
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 };
