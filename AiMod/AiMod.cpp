@@ -612,26 +612,30 @@ void DetectionSystem::DetectionLoop() {
                     double outX = m_pidX.update(dx);
                     double outY = m_pidY.update(dy);
 
-                    if (m_config.moveMode == 0) {
-                        // 曲线模式: 使用 MMousePredictor 生成人性化轨迹
+                    float smooth = std::max(m_config.aimSmooth, 1.0f);
+                    int mx = (int)std::round(outX / smooth);
+                    int my = (int)std::round(outY / smooth);
+
+                    if (mx == 0 && my == 0) {
+                        // PID输出太小，跳过
+                    } else if (m_config.moveMode == 0 && (std::abs(outX) > 5.0 || std::abs(outY) > 5.0)) {
+                        // 曲线模式: 仅当移动量足够大时使用曲线
                         auto path = m_mouseCurve.moveTo(outX, outY);
-                        // 发送轨迹上的每一个点
-                        float smooth = std::max(m_config.aimSmooth, 1.0f);
-                        for (const auto& pt : path) {
-                            int mx = (int)std::round(pt.first / smooth);
-                            int my = (int)std::round(pt.second / smooth);
-                            if (mx != 0 || my != 0) {
-                                MoveMouse(mx, my);
+                        if (!path.empty()) {
+                            for (const auto& pt : path) {
+                                int px = (int)std::round(pt.first / smooth);
+                                int py = (int)std::round(pt.second / smooth);
+                                if (px != 0 || py != 0) {
+                                    MoveMouse(px, py);
+                                }
                             }
-                        }
-                    } else {
-                        // 直接模式: 一次SendInput移动
-                        float smooth = std::max(m_config.aimSmooth, 1.0f);
-                        int mx = (int)std::round(outX / smooth);
-                        int my = (int)std::round(outY / smooth);
-                        if (mx != 0 || my != 0) {
+                        } else {
+                            // 曲线返回空, fallback到直接移动
                             MoveMouse(mx, my);
                         }
+                    } else {
+                        // 直接模式 或 小移动量直接发送
+                        MoveMouse(mx, my);
                     }
                 } else {
                     // 未按键时重置PID, 下次按键时从新鲜状态开始
