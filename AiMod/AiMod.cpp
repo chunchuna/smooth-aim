@@ -149,6 +149,10 @@ struct DetectionConfig {
     float aimFovRadius = 160.0f;    // 自瞄FOV半径(像素), 超出不瞄
     float headOffset = 0.35f;       // 瞄头偏移 (0=中心, 0.5=顶部)
     int moveMode = 0;               // 鼠标移动模式: 0=曲线(MMousePredictor), 1=直接SendInput
+
+    // --- 压枪相关 ---
+    int recoilKeyIndex = 1;         // 压枪触发键索引 (AimKeyOptions[], 1=左键)
+    bool recoilAimOnly = false;     // 压枪仅在自瞄键按下时生效
 };
 
 // ============================================================
@@ -180,7 +184,9 @@ static void SaveConfig(const DetectionConfig& cfg, const std::string& path = "ai
     f << "  \"aimSmooth\": " << cfg.aimSmooth << ",\n";
     f << "  \"aimFovRadius\": " << cfg.aimFovRadius << ",\n";
     f << "  \"headOffset\": " << cfg.headOffset << ",\n";
-    f << "  \"moveMode\": " << cfg.moveMode << "\n";
+    f << "  \"moveMode\": " << cfg.moveMode << ",\n";
+    f << "  \"recoilKeyIndex\": " << cfg.recoilKeyIndex << ",\n";
+    f << "  \"recoilAimOnly\": " << (cfg.recoilAimOnly ? "true" : "false") << "\n";
     f << "}\n";
     f.close();
 }
@@ -254,6 +260,8 @@ static DetectionConfig LoadConfig(const std::string& path = "aimod_config.json")
     cfg.aimFovRadius = (float)ExtractJsonNumber(json, "aimFovRadius", cfg.aimFovRadius);
     cfg.headOffset = (float)ExtractJsonNumber(json, "headOffset", cfg.headOffset);
     cfg.moveMode = (int)ExtractJsonNumber(json, "moveMode", cfg.moveMode);
+    cfg.recoilKeyIndex = (int)ExtractJsonNumber(json, "recoilKeyIndex", cfg.recoilKeyIndex);
+    cfg.recoilAimOnly = ExtractJsonBool(json, "recoilAimOnly", cfg.recoilAimOnly);
     return cfg;
 }
 
@@ -670,7 +678,9 @@ void DetectionSystem::DetectionLoop() {
         }
 
         // Recoil compensation (runs independently of aim assist)
-        auto [rcX, rcY] = m_recoil.Update();
+        int aimVK = AimKeyOptions[m_config.aimKeyIndex % AimKeyCount];
+        bool aimHeld = (GetAsyncKeyState(aimVK) & 0x8000) != 0;
+        auto [rcX, rcY] = m_recoil.Update(aimHeld);
         if (rcX != 0 || rcY != 0) {
             MoveMouse(rcX, rcY);
         }
@@ -823,6 +833,8 @@ void DetectionSystem::GuiLoop() {
     m_guiPanel.valAimKey = m_config.aimKeyIndex;
     m_guiPanel.valMoveMode = m_config.moveMode;
     m_guiPanel.valPreview = m_config.enableDisplay ? 1 : 0;
+    m_guiPanel.valRecoilKey = m_config.recoilKeyIndex;
+    m_guiPanel.valRecoilAimOnly = m_config.recoilAimOnly ? 1 : 0;
     // 找到模型在列表中的位置
     m_guiPanel.valModelIdx = 0;
     for (int i = 0; i < (int)g_modelFiles.size(); i++) {
@@ -848,6 +860,15 @@ void DetectionSystem::GuiLoop() {
         // Default to "Off" (last entry)
         m_guiPanel.valRecoilWeapon = (int)weaponNames.size() - 1;
         SendMessage(hRcCombo, CB_SETCURSEL, m_guiPanel.valRecoilWeapon, 0);
+    }
+
+    // 填充压枪按键下拉框
+    {
+        HWND hRcKeyCombo = GetDlgItem(m_guiPanel.GetHwnd(), ID_COMBO_RECOIL_KEY);
+        for (int i = 0; i < AimKeyCount; i++) {
+            SendMessageA(hRcKeyCombo, CB_ADDSTRING, 0, (LPARAM)AimKeyNames[i]);
+        }
+        SendMessage(hRcKeyCombo, CB_SETCURSEL, m_guiPanel.valRecoilKey, 0);
     }
 
     // Show device info
@@ -884,6 +905,8 @@ void DetectionSystem::GuiLoop() {
         m_guiPanel.valAimKey = m_config.aimKeyIndex;
         m_guiPanel.valMoveMode = m_config.moveMode;
         m_guiPanel.valPreview = m_config.enableDisplay ? 1 : 0;
+        m_guiPanel.valRecoilKey = m_config.recoilKeyIndex;
+        m_guiPanel.valRecoilAimOnly = m_config.recoilAimOnly ? 1 : 0;
         m_guiPanel.valModelIdx = 0;
         for (int i = 0; i < (int)g_modelFiles.size(); i++) {
             if (g_modelFiles[i] == m_config.modelPath) { m_guiPanel.valModelIdx = i; break; }
@@ -958,6 +981,10 @@ void DetectionSystem::GuiLoop() {
         m_recoil.smoothSteps = m_guiPanel.valRecoilSmooth;
         m_recoil.holdDelayMs = m_guiPanel.valRecoilHoldMs;
         m_recoil.timeOffsetMs = m_guiPanel.valRecoilTimeOff;
+        m_recoil.triggerKey = AimKeyOptions[m_guiPanel.valRecoilKey % AimKeyCount];
+        m_recoil.aimOnly = (m_guiPanel.valRecoilAimOnly != 0);
+        m_config.recoilKeyIndex = m_guiPanel.valRecoilKey;
+        m_config.recoilAimOnly = (m_guiPanel.valRecoilAimOnly != 0);
 
         // Update class filter checkboxes when model changes
         if (m_classFilterDirty.exchange(false, std::memory_order_acquire)) {

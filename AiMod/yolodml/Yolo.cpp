@@ -167,6 +167,14 @@ bool YoloBaseDetectorDML::InitializePath(const char* weightsPath, int device, in
     }
 
     OrtStatus* status = OrtSessionOptionsAppendExecutionProvider_DML(m_session_options, device);
+    if (status != nullptr) {
+        const char* msg = m_ort->GetErrorMessage(status);
+        std::cerr << "[ONNX] WARNING: DML provider failed (device=" << device << "): " << (msg ? msg : "unknown") << std::endl;
+        std::cerr << "[ONNX] Falling back to CPU execution!" << std::endl;
+        m_ort->ReleaseStatus(status);
+    } else {
+        std::cout << "[ONNX] DirectML GPU provider registered (device=" << device << ")" << std::endl;
+    }
 
     if (!CheckStatus(m_ort->CreateSession(m_env, String2WString(weightsPath).c_str(), m_session_options, &m_session), __LINE__)) {
         return false;
@@ -213,6 +221,14 @@ bool YoloBaseDetectorDML::InitializeData(const unsigned char* modelData, size_t 
     }
 
     OrtStatus* status = OrtSessionOptionsAppendExecutionProvider_DML(m_session_options, device);
+    if (status != nullptr) {
+        const char* msg = m_ort->GetErrorMessage(status);
+        std::cerr << "[ONNX] WARNING: DML provider failed (device=" << device << "): " << (msg ? msg : "unknown") << std::endl;
+        std::cerr << "[ONNX] Falling back to CPU execution!" << std::endl;
+        m_ort->ReleaseStatus(status);
+    } else {
+        std::cout << "[ONNX] DirectML GPU provider registered (device=" << device << ")" << std::endl;
+    }
 
     if (!CheckStatus(m_ort->CreateSessionFromArray(m_env, modelData, modelLen, m_session_options, &m_session), __LINE__)) {
         return false;

@@ -210,6 +210,16 @@ void Win32GuiPanel::CreateControls() {
     MakeLabel(m_hwnd, m_font, "--- Recoil Control ---", x, y, 200, 18);
     y += 20;
     MakeCheck(m_hwnd, m_font, "Recoil Enabled", x, y, 130, 20, ID_CHECK_RECOIL_ENABLED, valRecoilEnabled != 0);
+    MakeCheck(m_hwnd, m_font, "Aim Only", x + 140, y, 90, 20, ID_CHECK_RECOIL_AIMONLY, valRecoilAimOnly != 0);
+    y += rowH;
+
+    MakeLabel(m_hwnd, m_font, "Recoil Key:", x, y + 3, 70, 20);
+    CreateWindowA("COMBOBOX", "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+        x + 75, y, 185, comboH, m_hwnd, (HMENU)(INT_PTR)ID_COMBO_RECOIL_KEY, nullptr, nullptr);
+    {
+        HWND hRcKeyCombo = GetDlgItem(m_hwnd, ID_COMBO_RECOIL_KEY);
+        SendMessage(hRcKeyCombo, WM_SETFONT, (WPARAM)m_font, TRUE);
+    }
     y += rowH;
 
     MakeLabel(m_hwnd, m_font, "Weapon:", x, y + 3, 55, 20);
@@ -314,6 +324,14 @@ void Win32GuiPanel::OnCommand(WPARAM wParam) {
         break;
     case ID_CHECK_RECOIL_ENABLED:
         valRecoilEnabled = (SendMessage(GetDlgItem(m_hwnd, ID_CHECK_RECOIL_ENABLED), BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
+        break;
+    case ID_CHECK_RECOIL_AIMONLY:
+        valRecoilAimOnly = (SendMessage(GetDlgItem(m_hwnd, ID_CHECK_RECOIL_AIMONLY), BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
+        break;
+    case ID_COMBO_RECOIL_KEY:
+        if (notif == CBN_SELCHANGE) {
+            valRecoilKey = (int)SendMessage(GetDlgItem(m_hwnd, ID_COMBO_RECOIL_KEY), CB_GETCURSEL, 0, 0);
+        }
         break;
     case ID_COMBO_RECOIL_WEAPON:
         if (notif == CBN_SELCHANGE) {
@@ -465,6 +483,9 @@ void Win32GuiPanel::SyncControlsFromValues() {
         valPreview ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessage(GetDlgItem(m_hwnd, ID_CHECK_RECOIL_ENABLED), BM_SETCHECK,
         valRecoilEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessage(GetDlgItem(m_hwnd, ID_CHECK_RECOIL_AIMONLY), BM_SETCHECK,
+        valRecoilAimOnly ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessage(GetDlgItem(m_hwnd, ID_COMBO_RECOIL_KEY), CB_SETCURSEL, valRecoilKey, 0);
 }
 
 void Win32GuiPanel::MessageLoop() {

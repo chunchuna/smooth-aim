@@ -58,6 +58,8 @@ enum GuiCtrlID {
     ID_SLIDER_RECOIL_HOLDMS,
     ID_SLIDER_RECOIL_TIMEOFF,
     ID_CHECK_RECOIL_ENABLED,
+    ID_CHECK_RECOIL_AIMONLY,
+    ID_COMBO_RECOIL_KEY,
     ID_LABEL_RECOIL_STRENGTH,
     ID_LABEL_RECOIL_SMOOTH,
     ID_LABEL_RECOIL_HOLDMS,
@@ -106,6 +108,8 @@ public:
     int valRecoilSmooth = 4;
     int valRecoilHoldMs = 100;
     int valRecoilTimeOff = 0;
+    int valRecoilKey = 1;       // index into AimKeyOptions (1=Left Mouse)
+    int valRecoilAimOnly = 0;   // 1=recoil only when aim key held
 
 private:
     HWND m_hwnd = nullptr;

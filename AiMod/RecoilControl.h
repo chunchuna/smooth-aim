@@ -146,6 +146,7 @@ public:
     int holdDelayMs = 100;      // ms to hold before activating recoil
     int timeOffsetMs = 0;       // timing adjustment (negative=earlier)
     int triggerKey = VK_LBUTTON; // key that triggers spray (default: left mouse)
+    bool aimOnly = false;        // only activate recoil when aim key is also held
 
     void Reset() {
         m_spraying = false;
@@ -158,7 +159,8 @@ public:
     }
 
     // Call every frame from detection loop. Returns (dx, dy) mouse move to apply.
-    std::pair<int, int> Update() {
+    // aimKeyHeld: whether the aim key is currently pressed (used for aimOnly gate)
+    std::pair<int, int> Update(bool aimKeyHeld = true) {
         if (!enabled) { Reset(); return {0, 0}; }
 
         auto& patterns = GetWeaponPatterns();
@@ -167,6 +169,11 @@ public:
         if (weapon.magSize == 0 || weapon.pattern.empty()) return {0, 0};
 
         bool keyDown = (GetAsyncKeyState(triggerKey) & 0x8000) != 0;
+
+        // Aim-only gate: treat trigger as not pressed when aim key is not held
+        if (aimOnly && !aimKeyHeld) {
+            keyDown = false;
+        }
         auto now = std::chrono::high_resolution_clock::now();
 
         if (keyDown && !m_wasKeyDown) {
