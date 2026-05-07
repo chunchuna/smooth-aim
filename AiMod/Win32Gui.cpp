@@ -181,7 +181,7 @@ void Win32GuiPanel::CreateControls() {
 
     addSlider("Smooth:",    ID_SLIDER_SMOOTH,  1, 100, &valSmooth,  0.1f, "");
     addSlider("FOV:",       ID_SLIDER_FOV,     0, 500, &valFov,     1.0f, "px");
-    addSlider("HeadOff:",   ID_SLIDER_HEADOFF, -100, 100, &valHeadOff, 0.01f, "");
+    addSlider("HeadOff:",   ID_SLIDER_HEADOFF, -50, 50, &valHeadOff, 1.0f, "px");
     y += 8;
 
     MakeLabel(m_hwnd, m_font, "--- PID X ---", x, y, 200, 18);

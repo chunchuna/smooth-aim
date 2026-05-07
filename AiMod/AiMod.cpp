@@ -147,7 +147,7 @@ struct DetectionConfig {
     bool aimEnabled = true;         // 是否启用自瞄
     float aimSmooth = 1.0f;         // 自瞄平滑度 (1.0=直接, 越大越平滑)
     float aimFovRadius = 160.0f;    // 自瞄FOV半径(像素), 超出不瞄
-    float headOffset = 0.35f;       // 瞄头偏移 (0=中心, 0.5=顶部)
+    float headOffset = 5.0f;        // 瞄点偏移: 从框顶边往下的像素数 (0=顶边, 正值往下)
     int moveMode = 0;               // 鼠标移动模式: 0=曲线(MMousePredictor), 1=直接SendInput
 
     // --- 压枪相关 ---
@@ -688,8 +688,8 @@ void DetectionSystem::DetectionLoop() {
             const DetectionObject* closest = nullptr;
             for (const auto& obj : *trackedResults) {
                 float tcx = obj.bbox.x + obj.bbox.width / 2.0f;
-                // 应用头部偏移: headOffset=0 瞄中心, 0.5 瞄顶部
-                float tcy = obj.bbox.y + obj.bbox.height * (0.5f - m_config.headOffset);
+                // 锁定框顶边 + 像素偏移(正值往下)
+                float tcy = obj.bbox.y + m_config.headOffset;
                 float dx = tcx - centerX;
                 float dy = tcy - centerY;
                 float dist = dx * dx + dy * dy;
@@ -701,7 +701,8 @@ void DetectionSystem::DetectionLoop() {
 
             if (closest) {
                 double tcx = closest->bbox.x + closest->bbox.width / 2.0;
-                double tcy = closest->bbox.y + closest->bbox.height * (0.5 - m_config.headOffset);
+                // 锁定框顶边 + 像素偏移(正值往下)
+                double tcy = closest->bbox.y + (double)m_config.headOffset;
                 double dx = tcx - (width / 2.0);
                 double dy = tcy - (height / 2.0);
 
@@ -889,7 +890,7 @@ void DetectionSystem::GuiLoop() {
     // 初始化GUI面板值
     m_guiPanel.valSmooth = (int)(m_config.aimSmooth * 10);
     m_guiPanel.valFov = (int)(m_config.aimFovRadius);
-    m_guiPanel.valHeadOff = (int)(m_config.headOffset * 100);
+    m_guiPanel.valHeadOff = (int)(m_config.headOffset);
     m_guiPanel.valKpX = (int)(m_config.KpX * 10);
     m_guiPanel.valKdX = (int)(m_config.KdX * 10);
     m_guiPanel.valPredX = (int)(m_config.PredictX * 100);
@@ -970,7 +971,7 @@ void DetectionSystem::GuiLoop() {
         // 同步GUI面板值
         m_guiPanel.valSmooth = (int)(m_config.aimSmooth * 10);
         m_guiPanel.valFov = (int)(m_config.aimFovRadius);
-        m_guiPanel.valHeadOff = (int)(m_config.headOffset * 100);
+        m_guiPanel.valHeadOff = (int)(m_config.headOffset);
         m_guiPanel.valKpX = (int)(m_config.KpX * 10);
         m_guiPanel.valKdX = (int)(m_config.KdX * 10);
         m_guiPanel.valPredX = (int)(m_config.PredictX * 100);
@@ -1010,7 +1011,7 @@ void DetectionSystem::GuiLoop() {
     auto syncConfigToGui = [this]() {
         m_guiPanel.valSmooth = (int)(m_config.aimSmooth * 10);
         m_guiPanel.valFov = (int)(m_config.aimFovRadius);
-        m_guiPanel.valHeadOff = (int)(m_config.headOffset * 100);
+        m_guiPanel.valHeadOff = (int)(m_config.headOffset);
         m_guiPanel.valKpX = (int)(m_config.KpX * 10);
         m_guiPanel.valKdX = (int)(m_config.KdX * 10);
         m_guiPanel.valPredX = (int)(m_config.PredictX * 100);
@@ -1110,7 +1111,7 @@ void DetectionSystem::GuiLoop() {
         m_config.aimKeyIndex = m_guiPanel.valAimKey;
         m_config.aimSmooth = std::max(m_guiPanel.valSmooth / 10.0f, 0.1f);
         m_config.aimFovRadius = (float)m_guiPanel.valFov;
-        m_config.headOffset = m_guiPanel.valHeadOff / 100.0f;
+        m_config.headOffset = (float)m_guiPanel.valHeadOff;
         m_config.moveMode = m_guiPanel.valMoveMode;
         m_config.enableDisplay = (m_guiPanel.valPreview != 0);
         m_config.yoloMode = m_guiPanel.valYoloType;
