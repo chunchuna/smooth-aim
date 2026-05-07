@@ -68,6 +68,13 @@ enum GuiCtrlID {
     ID_CHECK_CLASS_BASE = 1500,
     ID_BTN_CLASS_ALL = 1600,
     ID_BTN_CLASS_NONE,
+    // profile controls
+    ID_COMBO_PROFILE = 1700,
+    ID_BTN_PROFILE_SAVE,
+    ID_BTN_PROFILE_LOAD,
+    ID_BTN_PROFILE_DELETE,
+    ID_BTN_PROFILE_NEW,
+    ID_EDIT_PROFILE_NAME,
 };
 
 class Win32GuiPanel {
@@ -76,6 +83,11 @@ public:
     std::function<void()> onSaveConfig;
     std::function<void()> onLoadConfig;
     std::function<void()> onQuit;
+    std::function<void(const std::string&)> onProfileSave;   // save current config as named profile
+    std::function<void(const std::string&)> onProfileLoad;   // load a named profile
+    std::function<void(const std::string&)> onProfileDelete; // delete a named profile
+
+    void RefreshProfileList(const std::vector<std::string>& names, const std::string& current);
 
     bool Create(HINSTANCE hInst);
     void Destroy();
@@ -110,6 +122,9 @@ public:
     int valRecoilTimeOff = 0;
     int valRecoilKey = 1;       // index into AimKeyOptions (1=Left Mouse)
     int valRecoilAimOnly = 0;   // 1=recoil only when aim key held
+
+    // Profile
+    std::string currentProfileName;
 
 private:
     HWND m_hwnd = nullptr;

@@ -151,8 +151,17 @@ struct DetectionConfig {
     int moveMode = 0;               // 鼠标移动模式: 0=曲线(MMousePredictor), 1=直接SendInput
 
     // --- 压枪相关 ---
+    bool recoilEnabled = false;     // 是否启用压枪
+    int recoilWeapon = -1;          // 武器索引 (-1=Off/最后一项)
+    float recoilStrength = 1.0f;    // 压枪强度
+    int recoilSmooth = 4;           // 平滑步数
+    int recoilHoldMs = 100;         // 按住多久才触发压枪
+    int recoilTimeOff = 0;          // 时间偏移
     int recoilKeyIndex = 1;         // 压枪触发键索引 (AimKeyOptions[], 1=左键)
     bool recoilAimOnly = false;     // 压枪仅在自瞄键按下时生效
+
+    // --- 配置方案 ---
+    std::string profileName = "";   // 当前方案名称 (空=默认)
 };
 
 // ============================================================
@@ -185,6 +194,12 @@ static void SaveConfig(const DetectionConfig& cfg, const std::string& path = "ai
     f << "  \"aimFovRadius\": " << cfg.aimFovRadius << ",\n";
     f << "  \"headOffset\": " << cfg.headOffset << ",\n";
     f << "  \"moveMode\": " << cfg.moveMode << ",\n";
+    f << "  \"recoilEnabled\": " << (cfg.recoilEnabled ? "true" : "false") << ",\n";
+    f << "  \"recoilWeapon\": " << cfg.recoilWeapon << ",\n";
+    f << "  \"recoilStrength\": " << cfg.recoilStrength << ",\n";
+    f << "  \"recoilSmooth\": " << cfg.recoilSmooth << ",\n";
+    f << "  \"recoilHoldMs\": " << cfg.recoilHoldMs << ",\n";
+    f << "  \"recoilTimeOff\": " << cfg.recoilTimeOff << ",\n";
     f << "  \"recoilKeyIndex\": " << cfg.recoilKeyIndex << ",\n";
     f << "  \"recoilAimOnly\": " << (cfg.recoilAimOnly ? "true" : "false") << "\n";
     f << "}\n";
@@ -260,9 +275,66 @@ static DetectionConfig LoadConfig(const std::string& path = "aimod_config.json")
     cfg.aimFovRadius = (float)ExtractJsonNumber(json, "aimFovRadius", cfg.aimFovRadius);
     cfg.headOffset = (float)ExtractJsonNumber(json, "headOffset", cfg.headOffset);
     cfg.moveMode = (int)ExtractJsonNumber(json, "moveMode", cfg.moveMode);
+    cfg.recoilEnabled = ExtractJsonBool(json, "recoilEnabled", cfg.recoilEnabled);
+    cfg.recoilWeapon = (int)ExtractJsonNumber(json, "recoilWeapon", cfg.recoilWeapon);
+    cfg.recoilStrength = (float)ExtractJsonNumber(json, "recoilStrength", cfg.recoilStrength);
+    cfg.recoilSmooth = (int)ExtractJsonNumber(json, "recoilSmooth", cfg.recoilSmooth);
+    cfg.recoilHoldMs = (int)ExtractJsonNumber(json, "recoilHoldMs", cfg.recoilHoldMs);
+    cfg.recoilTimeOff = (int)ExtractJsonNumber(json, "recoilTimeOff", cfg.recoilTimeOff);
     cfg.recoilKeyIndex = (int)ExtractJsonNumber(json, "recoilKeyIndex", cfg.recoilKeyIndex);
     cfg.recoilAimOnly = ExtractJsonBool(json, "recoilAimOnly", cfg.recoilAimOnly);
     return cfg;
+}
+
+// ============================================================
+// 配置方案 (Profile) 管理
+// ============================================================
+static const std::string PROFILES_DIR = "profiles";
+
+static std::vector<std::string> ScanProfiles() {
+    std::vector<std::string> names;
+    namespace fs = std::filesystem;
+    if (!fs::exists(PROFILES_DIR)) {
+        fs::create_directories(PROFILES_DIR);
+        return names;
+    }
+    for (auto& entry : fs::directory_iterator(PROFILES_DIR)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".json") {
+            names.push_back(entry.path().stem().string());
+        }
+    }
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+static void SaveProfile(const std::string& name, const DetectionConfig& cfg) {
+    namespace fs = std::filesystem;
+    if (!fs::exists(PROFILES_DIR)) fs::create_directories(PROFILES_DIR);
+    std::string path = PROFILES_DIR + "/" + name + ".json";
+    SaveConfig(cfg, path);
+    // Remember last used profile
+    std::ofstream lf(PROFILES_DIR + "/_last.txt");
+    if (lf.is_open()) { lf << name; lf.close(); }
+}
+
+static DetectionConfig LoadProfile(const std::string& name) {
+    std::string path = PROFILES_DIR + "/" + name + ".json";
+    return LoadConfig(path);
+}
+
+static void DeleteProfile(const std::string& name) {
+    std::string path = PROFILES_DIR + "/" + name + ".json";
+    std::filesystem::remove(path);
+}
+
+static std::string GetLastProfile() {
+    std::ifstream f(PROFILES_DIR + "/_last.txt");
+    if (!f.is_open()) return "";
+    std::string name;
+    std::getline(f, name);
+    f.close();
+    if (!std::filesystem::exists(PROFILES_DIR + "/" + name + ".json")) return "";
+    return name;
 }
 
 // ============================================================
@@ -833,6 +905,12 @@ void DetectionSystem::GuiLoop() {
     m_guiPanel.valAimKey = m_config.aimKeyIndex;
     m_guiPanel.valMoveMode = m_config.moveMode;
     m_guiPanel.valPreview = m_config.enableDisplay ? 1 : 0;
+    m_guiPanel.valRecoilEnabled = m_config.recoilEnabled ? 1 : 0;
+    m_guiPanel.valRecoilWeapon = m_config.recoilWeapon;
+    m_guiPanel.valRecoilStrength = (int)(m_config.recoilStrength * 10);
+    m_guiPanel.valRecoilSmooth = m_config.recoilSmooth;
+    m_guiPanel.valRecoilHoldMs = m_config.recoilHoldMs;
+    m_guiPanel.valRecoilTimeOff = m_config.recoilTimeOff;
     m_guiPanel.valRecoilKey = m_config.recoilKeyIndex;
     m_guiPanel.valRecoilAimOnly = m_config.recoilAimOnly ? 1 : 0;
     // 找到模型在列表中的位置
@@ -857,8 +935,11 @@ void DetectionSystem::GuiLoop() {
         for (auto& wn : weaponNames) {
             SendMessageA(hRcCombo, CB_ADDSTRING, 0, (LPARAM)wn.c_str());
         }
-        // Default to "Off" (last entry)
-        m_guiPanel.valRecoilWeapon = (int)weaponNames.size() - 1;
+        // Use loaded config value if valid, otherwise default to "Off" (last entry)
+        int weaponCount = (int)weaponNames.size();
+        if (m_guiPanel.valRecoilWeapon < 0 || m_guiPanel.valRecoilWeapon >= weaponCount) {
+            m_guiPanel.valRecoilWeapon = weaponCount - 1;
+        }
         SendMessage(hRcCombo, CB_SETCURSEL, m_guiPanel.valRecoilWeapon, 0);
     }
 
@@ -905,6 +986,12 @@ void DetectionSystem::GuiLoop() {
         m_guiPanel.valAimKey = m_config.aimKeyIndex;
         m_guiPanel.valMoveMode = m_config.moveMode;
         m_guiPanel.valPreview = m_config.enableDisplay ? 1 : 0;
+        m_guiPanel.valRecoilEnabled = m_config.recoilEnabled ? 1 : 0;
+        m_guiPanel.valRecoilWeapon = m_config.recoilWeapon;
+        m_guiPanel.valRecoilStrength = (int)(m_config.recoilStrength * 10);
+        m_guiPanel.valRecoilSmooth = m_config.recoilSmooth;
+        m_guiPanel.valRecoilHoldMs = m_config.recoilHoldMs;
+        m_guiPanel.valRecoilTimeOff = m_config.recoilTimeOff;
         m_guiPanel.valRecoilKey = m_config.recoilKeyIndex;
         m_guiPanel.valRecoilAimOnly = m_config.recoilAimOnly ? 1 : 0;
         m_guiPanel.valModelIdx = 0;
@@ -918,6 +1005,69 @@ void DetectionSystem::GuiLoop() {
     m_guiPanel.onQuit = [this]() {
         m_running = false;
     };
+
+    // Helper: sync m_config -> GUI panel values
+    auto syncConfigToGui = [this]() {
+        m_guiPanel.valSmooth = (int)(m_config.aimSmooth * 10);
+        m_guiPanel.valFov = (int)(m_config.aimFovRadius);
+        m_guiPanel.valHeadOff = (int)(m_config.headOffset * 100);
+        m_guiPanel.valKpX = (int)(m_config.KpX * 10);
+        m_guiPanel.valKdX = (int)(m_config.KdX * 10);
+        m_guiPanel.valPredX = (int)(m_config.PredictX * 100);
+        m_guiPanel.valRateX = (int)(m_config.RateX * 100);
+        m_guiPanel.valKpY = (int)(m_config.KpY * 10);
+        m_guiPanel.valKdY = (int)(m_config.KdY * 10);
+        m_guiPanel.valPredY = (int)(m_config.PredictY * 100);
+        m_guiPanel.valRateY = (int)(m_config.RateY * 100);
+        m_guiPanel.valConf = (int)(m_config.confThreshold * 100);
+        m_guiPanel.valNms = (int)(m_config.nmsThreshold * 100);
+        m_guiPanel.valYoloType = m_config.yoloMode;
+        m_guiPanel.valAimEnabled = m_config.aimEnabled ? 1 : 0;
+        m_guiPanel.valAimKey = m_config.aimKeyIndex;
+        m_guiPanel.valMoveMode = m_config.moveMode;
+        m_guiPanel.valPreview = m_config.enableDisplay ? 1 : 0;
+        m_guiPanel.valRecoilEnabled = m_config.recoilEnabled ? 1 : 0;
+        m_guiPanel.valRecoilWeapon = m_config.recoilWeapon;
+        m_guiPanel.valRecoilStrength = (int)(m_config.recoilStrength * 10);
+        m_guiPanel.valRecoilSmooth = m_config.recoilSmooth;
+        m_guiPanel.valRecoilHoldMs = m_config.recoilHoldMs;
+        m_guiPanel.valRecoilTimeOff = m_config.recoilTimeOff;
+        m_guiPanel.valRecoilKey = m_config.recoilKeyIndex;
+        m_guiPanel.valRecoilAimOnly = m_config.recoilAimOnly ? 1 : 0;
+        m_guiPanel.valModelIdx = 0;
+        for (int i = 0; i < (int)g_modelFiles.size(); i++) {
+            if (g_modelFiles[i] == m_config.modelPath) { m_guiPanel.valModelIdx = i; break; }
+        }
+        m_guiPanel.SyncControlsFromValues();
+        m_pidDirty.store(true, std::memory_order_release);
+    };
+
+    // Profile callbacks
+    m_guiPanel.onProfileSave = [this](const std::string& name) {
+        SaveProfile(name, m_config);
+        m_guiPanel.RefreshProfileList(ScanProfiles(), name);
+        std::cout << "[AiMod] Profile saved: " << name << std::endl;
+    };
+    m_guiPanel.onProfileLoad = [this, syncConfigToGui](const std::string& name) {
+        m_config = LoadProfile(name);
+        m_config.profileName = name;
+        syncConfigToGui();
+        m_guiPanel.RefreshProfileList(ScanProfiles(), name);
+        std::cout << "[AiMod] Profile loaded: " << name << std::endl;
+    };
+    m_guiPanel.onProfileDelete = [this](const std::string& name) {
+        DeleteProfile(name);
+        auto profiles = ScanProfiles();
+        m_guiPanel.RefreshProfileList(profiles, profiles.empty() ? "" : profiles[0]);
+        std::cout << "[AiMod] Profile deleted: " << name << std::endl;
+    };
+
+    // Populate profile list
+    {
+        auto profiles = ScanProfiles();
+        std::string lastProf = GetLastProfile();
+        m_guiPanel.RefreshProfileList(profiles, lastProf);
+    }
 
     // GUI消息循环 + 定期同步config
     MSG msg;
@@ -983,6 +1133,12 @@ void DetectionSystem::GuiLoop() {
         m_recoil.timeOffsetMs = m_guiPanel.valRecoilTimeOff;
         m_recoil.triggerKey = AimKeyOptions[m_guiPanel.valRecoilKey % AimKeyCount];
         m_recoil.aimOnly = (m_guiPanel.valRecoilAimOnly != 0);
+        m_config.recoilEnabled = (m_guiPanel.valRecoilEnabled != 0);
+        m_config.recoilWeapon = m_guiPanel.valRecoilWeapon;
+        m_config.recoilStrength = m_guiPanel.valRecoilStrength / 10.0f;
+        m_config.recoilSmooth = m_guiPanel.valRecoilSmooth;
+        m_config.recoilHoldMs = m_guiPanel.valRecoilHoldMs;
+        m_config.recoilTimeOff = m_guiPanel.valRecoilTimeOff;
         m_config.recoilKeyIndex = m_guiPanel.valRecoilKey;
         m_config.recoilAimOnly = (m_guiPanel.valRecoilAimOnly != 0);
 

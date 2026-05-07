@@ -181,7 +181,7 @@ void Win32GuiPanel::CreateControls() {
 
     addSlider("Smooth:",    ID_SLIDER_SMOOTH,  1, 100, &valSmooth,  0.1f, "");
     addSlider("FOV:",       ID_SLIDER_FOV,     0, 500, &valFov,     1.0f, "px");
-    addSlider("HeadOff:",   ID_SLIDER_HEADOFF, 0, 50,  &valHeadOff, 0.01f, "");
+    addSlider("HeadOff:",   ID_SLIDER_HEADOFF, -100, 100, &valHeadOff, 0.01f, "");
     y += 8;
 
     MakeLabel(m_hwnd, m_font, "--- PID X ---", x, y, 200, 18);
@@ -244,6 +244,31 @@ void Win32GuiPanel::CreateControls() {
     y += 26;
     m_controlsEndY = y; // class checkboxes are added dynamically below this
     y += 12;
+
+    // === Profile Section ===
+    MakeLabel(m_hwnd, m_font, "--- Profile ---", x, y, 200, 18);
+    y += 20;
+    MakeLabel(m_hwnd, m_font, "Profile:", x, y + 3, 50, 20);
+    CreateWindowA("COMBOBOX", "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+        x + 55, y, 200, comboH, m_hwnd, (HMENU)(INT_PTR)ID_COMBO_PROFILE, nullptr, nullptr);
+    {
+        HWND hProfCombo = GetDlgItem(m_hwnd, ID_COMBO_PROFILE);
+        SendMessage(hProfCombo, WM_SETFONT, (WPARAM)m_font, TRUE);
+    }
+    y += rowH;
+    MakeBtn(m_hwnd, m_font, "Load", x, y, 55, 24, ID_BTN_PROFILE_LOAD);
+    MakeBtn(m_hwnd, m_font, "Save", x + 60, y, 55, 24, ID_BTN_PROFILE_SAVE);
+    MakeBtn(m_hwnd, m_font, "Delete", x + 120, y, 55, 24, ID_BTN_PROFILE_DELETE);
+    y += 28;
+    MakeLabel(m_hwnd, m_font, "New:", x, y + 3, 30, 20);
+    CreateWindowA("EDIT", "", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL,
+        x + 35, y, 140, 22, m_hwnd, (HMENU)(INT_PTR)ID_EDIT_PROFILE_NAME, nullptr, nullptr);
+    {
+        HWND hEdit = GetDlgItem(m_hwnd, ID_EDIT_PROFILE_NAME);
+        SendMessage(hEdit, WM_SETFONT, (WPARAM)m_font, TRUE);
+    }
+    MakeBtn(m_hwnd, m_font, "Create", x + 180, y, 55, 22, ID_BTN_PROFILE_NEW);
+    y += 28;
 
     // === Buttons ===
     MakeBtn(m_hwnd, m_font, "Save Config", x, y, 100, 28, ID_BTN_SAVE);
@@ -346,6 +371,50 @@ void Win32GuiPanel::OnCommand(WPARAM wParam) {
         for (auto& cc : m_classChecks)
             SendMessage(cc.hCheck, BM_SETCHECK, BST_UNCHECKED, 0);
         break;
+    case ID_BTN_PROFILE_LOAD:
+    {
+        HWND hCombo = GetDlgItem(m_hwnd, ID_COMBO_PROFILE);
+        int sel = (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0);
+        if (sel >= 0) {
+            char buf[256] = {};
+            SendMessageA(hCombo, CB_GETLBTEXT, sel, (LPARAM)buf);
+            if (onProfileLoad) onProfileLoad(std::string(buf));
+        }
+        break;
+    }
+    case ID_BTN_PROFILE_SAVE:
+    {
+        HWND hCombo = GetDlgItem(m_hwnd, ID_COMBO_PROFILE);
+        int sel = (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0);
+        if (sel >= 0) {
+            char buf[256] = {};
+            SendMessageA(hCombo, CB_GETLBTEXT, sel, (LPARAM)buf);
+            if (onProfileSave) onProfileSave(std::string(buf));
+        }
+        break;
+    }
+    case ID_BTN_PROFILE_DELETE:
+    {
+        HWND hCombo = GetDlgItem(m_hwnd, ID_COMBO_PROFILE);
+        int sel = (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0);
+        if (sel >= 0) {
+            char buf[256] = {};
+            SendMessageA(hCombo, CB_GETLBTEXT, sel, (LPARAM)buf);
+            if (onProfileDelete) onProfileDelete(std::string(buf));
+        }
+        break;
+    }
+    case ID_BTN_PROFILE_NEW:
+    {
+        char buf[256] = {};
+        GetWindowTextA(GetDlgItem(m_hwnd, ID_EDIT_PROFILE_NAME), buf, sizeof(buf));
+        std::string name(buf);
+        if (!name.empty() && onProfileSave) {
+            onProfileSave(name);
+            SetWindowTextA(GetDlgItem(m_hwnd, ID_EDIT_PROFILE_NAME), "");
+        }
+        break;
+    }
     }
 }
 
@@ -486,6 +555,20 @@ void Win32GuiPanel::SyncControlsFromValues() {
     SendMessage(GetDlgItem(m_hwnd, ID_CHECK_RECOIL_AIMONLY), BM_SETCHECK,
         valRecoilAimOnly ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessage(GetDlgItem(m_hwnd, ID_COMBO_RECOIL_KEY), CB_SETCURSEL, valRecoilKey, 0);
+}
+
+void Win32GuiPanel::RefreshProfileList(const std::vector<std::string>& names, const std::string& current) {
+    if (!m_hwnd) return;
+    HWND hCombo = GetDlgItem(m_hwnd, ID_COMBO_PROFILE);
+    if (!hCombo) return;
+    SendMessage(hCombo, CB_RESETCONTENT, 0, 0);
+    int selIdx = -1;
+    for (int i = 0; i < (int)names.size(); i++) {
+        SendMessageA(hCombo, CB_ADDSTRING, 0, (LPARAM)names[i].c_str());
+        if (names[i] == current) selIdx = i;
+    }
+    if (selIdx >= 0) SendMessage(hCombo, CB_SETCURSEL, selIdx, 0);
+    currentProfileName = current;
 }
 
 void Win32GuiPanel::MessageLoop() {
