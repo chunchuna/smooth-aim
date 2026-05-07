@@ -659,7 +659,7 @@ void DetectionSystem::DetectionLoop() {
                         }
                     }
                 } else {
-                    // 未按键时重置PID, 下次按键时从新鲜状态开始
+                    // 未按键时重置, 下次按键时从新鲜状态开始
                     m_pidX.reset();
                     m_pidY.reset();
                 }
@@ -909,7 +909,7 @@ void DetectionSystem::GuiLoop() {
             DispatchMessage(&msg);
         }
 
-        // 从GUI面板值同步到config
+        // 从 GUI面板值同步到config
         bool pidChanged = false;
         float newKpX = m_guiPanel.valKpX / 10.0f;
         float newKdX = m_guiPanel.valKdX / 10.0f;
