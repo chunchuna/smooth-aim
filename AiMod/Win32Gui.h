@@ -59,6 +59,7 @@ enum GuiCtrlID {
     ID_SLIDER_RECOIL_TIMEOFF,
     ID_CHECK_RECOIL_ENABLED,
     ID_CHECK_RECOIL_AIMONLY,
+    ID_CHECK_SCAN_TRANSFER,
     ID_COMBO_RECOIL_KEY,
     ID_LABEL_RECOIL_STRENGTH,
     ID_LABEL_RECOIL_SMOOTH,
@@ -122,6 +123,7 @@ public:
     int valRecoilTimeOff = 0;
     int valRecoilKey = 1;       // index into AimKeyOptions (1=Left Mouse)
     int valRecoilAimOnly = 0;   // 1=recoil only when aim key held
+    int valScanTransfer = 0;    // 1=spray transfer (X-only aim during spray)
 
     // Profile
     std::string currentProfileName;

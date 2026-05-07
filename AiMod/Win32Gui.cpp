@@ -234,6 +234,14 @@ void Win32GuiPanel::CreateControls() {
     addSlider("Smooth:",   ID_SLIDER_RECOIL_SMOOTH,   1, 16, &valRecoilSmooth,   1.0f, "");
     addSlider("Hold ms:",  ID_SLIDER_RECOIL_HOLDMS,   0, 500, &valRecoilHoldMs,  1.0f, "ms");
     addSlider("TimeOff:",  ID_SLIDER_RECOIL_TIMEOFF, -100, 100, &valRecoilTimeOff, 1.0f, "ms");
+    {
+        HWND hChk = CreateWindowA("BUTTON", "Scan Transfer (X-only on spray)",
+            WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+            x, y, 260, 20, m_hwnd, (HMENU)(INT_PTR)ID_CHECK_SCAN_TRANSFER, nullptr, nullptr);
+        SendMessage(hChk, WM_SETFONT, (WPARAM)m_font, TRUE);
+        SendMessage(hChk, BM_SETCHECK, valScanTransfer ? BST_CHECKED : BST_UNCHECKED, 0);
+        y += rowH;
+    }
     y += 12;
 
     // === Class Filter (placeholder, rebuilt on model load) ===
@@ -352,6 +360,9 @@ void Win32GuiPanel::OnCommand(WPARAM wParam) {
         break;
     case ID_CHECK_RECOIL_AIMONLY:
         valRecoilAimOnly = (SendMessage(GetDlgItem(m_hwnd, ID_CHECK_RECOIL_AIMONLY), BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
+        break;
+    case ID_CHECK_SCAN_TRANSFER:
+        valScanTransfer = (SendMessage(GetDlgItem(m_hwnd, ID_CHECK_SCAN_TRANSFER), BM_GETCHECK, 0, 0) == BST_CHECKED) ? 1 : 0;
         break;
     case ID_COMBO_RECOIL_KEY:
         if (notif == CBN_SELCHANGE) {
@@ -554,6 +565,8 @@ void Win32GuiPanel::SyncControlsFromValues() {
         valRecoilEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessage(GetDlgItem(m_hwnd, ID_CHECK_RECOIL_AIMONLY), BM_SETCHECK,
         valRecoilAimOnly ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessage(GetDlgItem(m_hwnd, ID_CHECK_SCAN_TRANSFER), BM_SETCHECK,
+        valScanTransfer ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessage(GetDlgItem(m_hwnd, ID_COMBO_RECOIL_KEY), CB_SETCURSEL, valRecoilKey, 0);
 }
 

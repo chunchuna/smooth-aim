@@ -148,6 +148,7 @@ struct DetectionConfig {
     float aimSmooth = 1.0f;         // 自瞄平滑度 (1.0=直接, 越大越平滑)
     float aimFovRadius = 160.0f;    // 自瞄FOV半径(像素), 超出不瞄
     float headOffset = 5.0f;        // 瞄点偏移: 从框顶边往下的像素数 (0=顶边, 正值往下)
+    bool scanTransfer = false;      // 扫转模式: 压枪时自瞄只移动X轴,Y轴不锁
     int moveMode = 0;               // 鼠标移动模式: 0=曲线(MMousePredictor), 1=直接SendInput
 
     // --- 压枪相关 ---
@@ -193,6 +194,7 @@ static void SaveConfig(const DetectionConfig& cfg, const std::string& path = "ai
     f << "  \"aimSmooth\": " << cfg.aimSmooth << ",\n";
     f << "  \"aimFovRadius\": " << cfg.aimFovRadius << ",\n";
     f << "  \"headOffset\": " << cfg.headOffset << ",\n";
+    f << "  \"scanTransfer\": " << (cfg.scanTransfer ? "true" : "false") << ",\n";
     f << "  \"moveMode\": " << cfg.moveMode << ",\n";
     f << "  \"recoilEnabled\": " << (cfg.recoilEnabled ? "true" : "false") << ",\n";
     f << "  \"recoilWeapon\": " << cfg.recoilWeapon << ",\n";
@@ -274,6 +276,7 @@ static DetectionConfig LoadConfig(const std::string& path = "aimod_config.json")
     cfg.aimSmooth = (float)ExtractJsonNumber(json, "aimSmooth", cfg.aimSmooth);
     cfg.aimFovRadius = (float)ExtractJsonNumber(json, "aimFovRadius", cfg.aimFovRadius);
     cfg.headOffset = (float)ExtractJsonNumber(json, "headOffset", cfg.headOffset);
+    cfg.scanTransfer = ExtractJsonBool(json, "scanTransfer", cfg.scanTransfer);
     cfg.moveMode = (int)ExtractJsonNumber(json, "moveMode", cfg.moveMode);
     cfg.recoilEnabled = ExtractJsonBool(json, "recoilEnabled", cfg.recoilEnabled);
     cfg.recoilWeapon = (int)ExtractJsonNumber(json, "recoilWeapon", cfg.recoilWeapon);
@@ -715,6 +718,10 @@ void DetectionSystem::DetectionLoop() {
                 bool aimKeyDown = (GetAsyncKeyState(aimVKey) & 0x8000) != 0;
 
                 if (m_config.aimEnabled && aimKeyDown && inFov) {
+                    // 扫转模式: 压枪时只移动X轴, Y轴不锁
+                    if (m_config.scanTransfer && m_recoil.IsSpraying()) {
+                        dy = 0.0;
+                    }
                     double outX = m_pidX.update(dx);
                     double outY = m_pidY.update(dy);
 
@@ -891,6 +898,7 @@ void DetectionSystem::GuiLoop() {
     m_guiPanel.valSmooth = (int)(m_config.aimSmooth * 10);
     m_guiPanel.valFov = (int)(m_config.aimFovRadius);
     m_guiPanel.valHeadOff = (int)(m_config.headOffset);
+    m_guiPanel.valScanTransfer = m_config.scanTransfer ? 1 : 0;
     m_guiPanel.valKpX = (int)(m_config.KpX * 10);
     m_guiPanel.valKdX = (int)(m_config.KdX * 10);
     m_guiPanel.valPredX = (int)(m_config.PredictX * 100);
@@ -972,6 +980,7 @@ void DetectionSystem::GuiLoop() {
         m_guiPanel.valSmooth = (int)(m_config.aimSmooth * 10);
         m_guiPanel.valFov = (int)(m_config.aimFovRadius);
         m_guiPanel.valHeadOff = (int)(m_config.headOffset);
+        m_guiPanel.valScanTransfer = m_config.scanTransfer ? 1 : 0;
         m_guiPanel.valKpX = (int)(m_config.KpX * 10);
         m_guiPanel.valKdX = (int)(m_config.KdX * 10);
         m_guiPanel.valPredX = (int)(m_config.PredictX * 100);
@@ -1012,6 +1021,7 @@ void DetectionSystem::GuiLoop() {
         m_guiPanel.valSmooth = (int)(m_config.aimSmooth * 10);
         m_guiPanel.valFov = (int)(m_config.aimFovRadius);
         m_guiPanel.valHeadOff = (int)(m_config.headOffset);
+        m_guiPanel.valScanTransfer = m_config.scanTransfer ? 1 : 0;
         m_guiPanel.valKpX = (int)(m_config.KpX * 10);
         m_guiPanel.valKdX = (int)(m_config.KdX * 10);
         m_guiPanel.valPredX = (int)(m_config.PredictX * 100);
@@ -1112,6 +1122,7 @@ void DetectionSystem::GuiLoop() {
         m_config.aimSmooth = std::max(m_guiPanel.valSmooth / 10.0f, 0.1f);
         m_config.aimFovRadius = (float)m_guiPanel.valFov;
         m_config.headOffset = (float)m_guiPanel.valHeadOff;
+        m_config.scanTransfer = (m_guiPanel.valScanTransfer != 0);
         m_config.moveMode = m_guiPanel.valMoveMode;
         m_config.enableDisplay = (m_guiPanel.valPreview != 0);
         m_config.yoloMode = m_guiPanel.valYoloType;

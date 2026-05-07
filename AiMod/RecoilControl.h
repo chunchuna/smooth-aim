@@ -148,6 +148,9 @@ public:
     int triggerKey = VK_LBUTTON; // key that triggers spray (default: left mouse)
     bool aimOnly = false;        // only activate recoil when aim key is also held
 
+    // Returns true if recoil is currently in active spray state
+    bool IsSpraying() const { return m_spraying && m_bulletIdx >= 1; }
+
     void Reset() {
         m_spraying = false;
         m_bulletIdx = -1;
